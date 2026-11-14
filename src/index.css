@@ -1,1 +1,139 @@
 @import "tailwindcss";
+
+:root {
+  /* Warm-tinted dark neutral surface hierarchy (OKLCH, hue ~55, low chroma) */
+  --bg-canvas: oklch(0.145 0.009 55);
+  --bg-surface: oklch(0.175 0.010 55);
+  --bg-elevated: oklch(0.208 0.011 55);
+  --bg-control: oklch(0.235 0.012 55);
+
+  /* 1px structural dividers */
+  --border-hairline: oklch(0.285 0.012 55);
+  --border-strong: oklch(0.390 0.015 55);
+
+  /* Warm typography scale */
+  --text-primary: oklch(0.945 0.008 70);
+  --text-secondary: oklch(0.755 0.012 65);
+  --text-muted: oklch(0.565 0.010 60);
+
+  /* Single amber system-state accent */
+  --accent-amber: oklch(0.785 0.165 72);
+  --accent-amber-soft: oklch(0.785 0.165 72 / 0.14);
+
+  /* Semantic status colors (meaning only) */
+  --status-safe: oklch(0.745 0.155 150);
+  --status-safe-soft: oklch(0.745 0.155 150 / 0.14);
+  --status-degraded: oklch(0.785 0.165 72);
+  --status-degraded-soft: oklch(0.785 0.165 72 / 0.16);
+  --status-critical: oklch(0.645 0.215 26);
+  --status-critical-soft: oklch(0.645 0.215 26 / 0.18);
+
+  /* Fixed distinct hues per utility agent (shared identically across all charts & panels) */
+  --agent-hospital: oklch(0.720 0.155 25);
+  --agent-emergency: oklch(0.790 0.150 78);
+  --agent-water: oklch(0.740 0.125 182);
+  --agent-telecom: oklch(0.740 0.115 135);
+}
+
+html,
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-label {
+  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.font-data {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom minimal range scrubber matching emergency control-room aesthetic */
+.blackout-scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.blackout-scrubber:focus-visible {
+  outline: 2px solid var(--accent-amber);
+  outline-offset: 2px;
+}
+
+.blackout-scrubber::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--border-strong);
+}
+
+.blackout-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 18px;
+  margin-top: -7px;
+  background: var(--accent-amber);
+  border: 1px solid var(--bg-canvas);
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.blackout-scrubber::-webkit-slider-thumb:hover {
+  transform: scaleY(1.15);
+}
+
+.blackout-scrubber::-moz-range-track {
+  height: 4px;
+  background: var(--border-strong);
+}
+
+.blackout-scrubber::-moz-range-thumb {
+  width: 14px;
+  height: 18px;
+  border-radius: 0;
+  background: var(--accent-amber);
+  border: 1px solid var(--bg-canvas);
+}
+
+/* One-shot screen-edge pulse when blackout is triggered */
+@keyframes blackout-edge-pulse {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.blackout-pulse-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  box-shadow: inset 0 0 0 3px var(--status-critical), inset 0 0 64px oklch(0.645 0.215 26 / 0.45);
+  animation: blackout-edge-pulse 720ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blackout-pulse-overlay {
+    animation: none;
+    opacity: 0;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
