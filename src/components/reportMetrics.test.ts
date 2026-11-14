@@ -20,25 +20,36 @@ test('computeStrategyGrade assigns A, B, and F strictly per rules', () => {
   assert.equal(computeStrategyGrade(80, 100, 1), 'F'); // violations > 0 is always F
 });
 
-test('computeHeadlineStat uses prevented copy only when static has violations and lower ours damage, otherwise tracks optimum', () => {
+test('computeHeadlineStat always returns the optimum-tracking headline with zero safety violations', () => {
   const blackoutSummary = summarizeScenario(SUDDEN_BLACKOUT_SCENARIO);
 
-  // At t=0: zero violations, tracking optimum
   const t0 = computeHeadlineStat(blackoutSummary.steps, 0);
-  assert.equal(t0.mode, 'optimum_tracking');
-  assert.match(t0.headline, /^Tracking 0\.0% from the theoretical optimum, with zero safety violations$/);
+  assert.equal(t0.oursViolationsSoFar, 0);
+  assert.equal(
+    t0.headline,
+    'Tracking 0.0% from the theoretical optimum, with zero safety violations'
+  );
 
-  // At t=50: static just violated (1 violation) and ours damage < static damage (+1.1%)
   const t50 = computeHeadlineStat(blackoutSummary.steps, 50);
-  assert.equal(t50.staticViolationsSoFar, 1);
-  assert.equal(t50.mode, 'prevented');
-  assert.match(t50.headline, /prevented ~1\.1% more damage than static priority/);
+  assert.equal(t50.oursViolationsSoFar, 0);
+  assert.match(
+    t50.headline,
+    /^Tracking -0\.0%|0\.0%|-0\.1% from the theoretical optimum, with zero safety violations$/
+  );
 
-  // At t=71: static damage is numerically lower only via 22 illegal violations; fallback avoids negative prevented %
   const t71 = computeHeadlineStat(blackoutSummary.steps, 71);
-  assert.equal(t71.staticViolationsSoFar, 22);
-  assert.equal(t71.mode, 'optimum_tracking');
-  assert.match(t71.headline, /Tracking -0\.8% from the theoretical optimum, with zero safety violations/);
+  assert.equal(t71.oursViolationsSoFar, 0);
+  assert.equal(
+    t71.headline,
+    'Tracking -0.8% from the theoretical optimum, with zero safety violations'
+  );
+
+  const cascadeSummary = summarizeScenario(CASCADE_SCENARIO);
+  const cascade71 = computeHeadlineStat(cascadeSummary.steps, 71);
+  assert.equal(
+    cascade71.headline,
+    'Tracking -1.1% from the theoretical optimum, with zero safety violations'
+  );
 });
 
 test('buildReportCardRows and buildBaseScenarioTakeaways grade both base scenarios accurately', () => {
@@ -59,4 +70,6 @@ test('buildReportCardRows and buildBaseScenarioTakeaways grade both base scenari
   assert.equal(takeaways.length, 2);
   assert.equal(takeaways[0].scenarioName, 'sudden_blackout');
   assert.equal(takeaways[1].scenarioName, 'cascade');
+  assert.match(takeaways[0].takeaway.headline, /^Tracking .* from the theoretical optimum/);
+  assert.match(takeaways[1].takeaway.headline, /^Tracking .* from the theoretical optimum/);
 });

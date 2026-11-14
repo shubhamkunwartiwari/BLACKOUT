@@ -1,38 +1,44 @@
+import { useMemo, useState } from 'react';
 import {
   AGENT_COLOR_VARS,
   AGENT_DISPLAY_ORDER,
   AGENT_LABELS,
 } from '../hooks/replayHelpers';
 import { DEFAULT_AGENTS, sumAllocations, type StepRecord } from '../sim';
+import { parseNegotiationLog } from './negotiationParser';
 
 interface PowerFlowDiagramProps {
   currentRecord: StepRecord;
 }
 
-const SVG_WIDTH = 680;
-const SVG_HEIGHT = 278;
-const LEFT_X = 24;
-const LEFT_WIDTH = 132;
-const RIGHT_X = 438;
-const RIGHT_WIDTH = 218;
-const TOP_PAD = 18;
+const SVG_WIDTH = 820;
+const SVG_HEIGHT = 286;
+const LEFT_X = 18;
+const LEFT_WIDTH = 124;
+const RIGHT_X = 342;
+const RIGHT_WIDTH = 188;
+const NODE_RIGHT_EDGE = RIGHT_X + RIGHT_WIDTH;
+const TOP_PAD = 24;
 const TOTAL_DEMAND_MW = DEFAULT_AGENTS.reduce((acc, a) => acc + a.demand_mw, 0);
 const NODE_GAP = 12;
-const USABLE_HEIGHT = SVG_HEIGHT - TOP_PAD * 2 - NODE_GAP * 3;
-const SCALE_MW_CAPACITY = 100; // consistent vertical MW scale for supply & demand blocks
+const USABLE_HEIGHT = SVG_HEIGHT - TOP_PAD - 18 - NODE_GAP * 3;
+const SCALE_MW_CAPACITY = 100;
 
 export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
+  const [showConcessions, setShowConcessions] = useState(true);
+
   const totalAlloc = sumAllocations(currentRecord.allocations);
   const supplyMw = Math.max(0, currentRecord.supply_mw);
   const surplusMw = Math.max(0, supplyMw - totalAlloc);
 
-  // Use same vertical pixels-per-MW for left supply node and right agent nodes
   const pxPerMw = USABLE_HEIGHT / SCALE_MW_CAPACITY;
-  const supplyHeight = Math.max(12, Math.min(SCALE_MW_CAPACITY, supplyMw) * pxPerMw);
-  const supplyCenterY = SVG_HEIGHT / 2;
+  const supplyHeight = Math.max(
+    12,
+    Math.min(SCALE_MW_CAPACITY, supplyMw) * pxPerMw
+  );
+  const supplyCenterY = TOP_PAD + (SVG_HEIGHT - TOP_PAD - 18) / 2;
   const supplyTopY = supplyCenterY - supplyHeight / 2;
 
-  // Build right-side agent slots (each sized by demand_mw)
   let rightCursorY = TOP_PAD;
   let leftCursorY = supplyTopY;
 
@@ -52,6 +58,7 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
     const dstY0 = rightCursorY;
     const dstY1 = rightCursorY + allocHeight;
     const unmetY0 = dstY1;
+    const slotCenterY = dstY0 + demandHeight / 2;
     rightCursorY += demandHeight + NODE_GAP;
 
     const x0 = LEFT_X + LEFT_WIDTH;
@@ -79,6 +86,7 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
       dstY0,
       dstY1,
       unmetY0,
+      slotCenterY,
       ribbonPath,
       midFlowY,
     };
@@ -86,22 +94,85 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
 
   const surplusHeight = Math.max(0, supplyTopY + supplyHeight - leftCursorY);
 
+  // Extract step concessions ("X conceded N MW to Y") as secondary annotation overlay
+  const concessionAnnotations = useMemo(() => {
+    const events = parseNegotiationLog(currentRecord).filter(
+      (ev) =>
+        ev.kind === 'concession' &&
+        ev.from &&
+        ev.to &&
+        (ev.amountMw ?? 0) > 0
+    );
+
+    const flowById = new Map(flows.map((f) => [f.id, f]));
+    const raw = events
+      .map((ev, idx) => {
+        const fromNode = flowById.get(ev.from!);
+        const toNode = flowById.get(ev.to!);
+        if (!fromNode || !toNode) return null;
+        return {
+          key: `${ev.round}-${ev.from}-${ev.to}-${idx}`,
+          round: ev.round,
+          fromId: ev.from!,
+          toId: ev.to!,
+          fromLabel: AGENT_LABELS[ev.from!],
+          amountMw: ev.amountMw!,
+          yFrom: fromNode.slotCenterY,
+          yTo: toNode.slotCenterY,
+          midY: (fromNode.slotCenterY + toNode.slotCenterY) / 2,
+          laneX: NODE_RIGHT_EDGE + 12 + idx * 9,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    // Compute clean non-overlapping label Y positions inside the right annotation gutter
+    const minSpacing = 28;
+    const labelStartY = 58;
+    const positioned = raw.map((item, idx) => ({
+      ...item,
+      labelY: Math.max(labelStartY + idx * minSpacing, item.midY),
+    }));
+    // Enforce monotonic separation so labels never collide
+    for (let i = 1; i < positioned.length; i++) {
+      if (positioned[i].labelY < positioned[i - 1].labelY + minSpacing) {
+        positioned[i].labelY = positioned[i - 1].labelY + minSpacing;
+      }
+    }
+    return positioned;
+  }, [currentRecord, flows]);
+
   return (
     <section
       aria-labelledby="power-flow-heading"
       data-testid="power-flow-diagram"
       className="border-b border-[var(--border-hairline)] px-6 py-5 lg:border-b-0 lg:border-r"
     >
-      <div className="mb-3 flex items-baseline justify-between gap-4 border-b border-[var(--border-hairline)] pb-2.5">
-        <h2
-          id="power-flow-heading"
-          className="font-label text-xs font-semibold text-[var(--text-secondary)]"
-        >
-          Power Flow — Supply to Utility Nodes
-        </h2>
-        <span className="font-data text-xs text-[var(--text-muted)]">
-          STEP {String(currentRecord.t).padStart(2, '0')} · {totalAlloc.toFixed(1)} / {TOTAL_DEMAND_MW} MW SERVED
-        </span>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-hairline)] pb-2.5">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h2
+            id="power-flow-heading"
+            className="font-label text-xs font-semibold text-[var(--text-secondary)]"
+          >
+            Power Flow — Supply to Utility Nodes
+          </h2>
+          <span className="font-data text-xs text-[var(--text-muted)]">
+            STEP {String(currentRecord.t).padStart(2, '0')} ·{' '}
+            {totalAlloc.toFixed(1)} / {TOTAL_DEMAND_MW} MW SERVED
+          </span>
+        </div>
+
+        <label className="inline-flex items-center gap-1.5 border border-[var(--border-hairline)] bg-[var(--bg-surface)] px-2.5 py-1 cursor-pointer select-none hover:border-[var(--border-strong)]">
+          <input
+            type="checkbox"
+            data-testid="power-flow-concessions-toggle"
+            checked={showConcessions}
+            onChange={(e) => setShowConcessions(e.target.checked)}
+            className="h-3.5 w-3.5 accent-[var(--accent-amber)] cursor-pointer"
+          />
+          <span className="font-label text-[10px] font-medium text-[var(--text-secondary)]">
+            show concessions
+          </span>
+        </label>
       </div>
 
       <div className="border border-[var(--border-hairline)] bg-[var(--bg-surface)]">
@@ -111,7 +182,29 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
           role="img"
           aria-label={`Power flow diagram from grid supply ${supplyMw.toFixed(1)} MW into hospital, emergency, water, and telecom`}
         >
-          {/* Flow ribbons */}
+          <defs>
+            <marker
+              id="concession-bracket-dot"
+              markerWidth="4"
+              markerHeight="4"
+              refX="2"
+              refY="2"
+            >
+              <circle cx="2" cy="2" r="1.5" fill="var(--accent-amber)" />
+            </marker>
+            <marker
+              id="concession-bracket-arrow"
+              markerWidth="5"
+              markerHeight="5"
+              refX="4"
+              refY="2.5"
+              orient="auto"
+            >
+              <polygon points="0 0, 5 2.5, 0 5" fill="var(--accent-amber)" />
+            </marker>
+          </defs>
+
+          {/* Primary Layer: Grid -> Agent Physical Power Flow Ribbons */}
           {flows.map((f) => {
             if (!f.ribbonPath) return null;
             return (
@@ -151,7 +244,6 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
               stroke="var(--accent-amber)"
               strokeWidth={1.5}
             />
-            {/* Colored supply slice indicators matching outgoing ribbons */}
             {flows.map((f) => (
               <rect
                 key={`slice-${f.id}`}
@@ -174,8 +266,8 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
             )}
 
             <text
-              x={LEFT_X + 10}
-              y={supplyTopY - 8 < 12 ? supplyTopY + 16 : supplyTopY - 7}
+              x={LEFT_X}
+              y={supplyTopY - 8 < 14 ? supplyTopY + 16 : supplyTopY - 7}
               fill="var(--text-secondary)"
               fontSize="10"
               fontWeight="600"
@@ -186,7 +278,7 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
 
             {surplusMw > 0.05 && surplusHeight >= 14 && (
               <text
-                x={LEFT_X + 10}
+                x={LEFT_X + 8}
                 y={leftCursorY + surplusHeight / 2 + 3.5}
                 fill="var(--text-muted)"
                 fontSize="10"
@@ -199,11 +291,11 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
 
           {/* Right Agent Nodes: Allocated Solid + Dashed Unmet Remainder */}
           {flows.map((f) => {
-            const labelY = f.dstY0 + Math.max(12, Math.min(20, f.allocHeight / 2 + 4));
+            const labelY =
+              f.dstY0 + Math.max(12, Math.min(20, f.allocHeight / 2 + 4));
             const showAllocInside = f.allocHeight >= 18;
             return (
               <g key={`node-${f.id}`}>
-                {/* Allocated solid block */}
                 {f.allocHeight > 0.5 && (
                   <rect
                     x={RIGHT_X}
@@ -217,7 +309,6 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
                   />
                 )}
 
-                {/* Unmet demand dimmed/dashed remainder */}
                 {f.unmetHeight > 1 && (
                   <rect
                     x={RIGHT_X}
@@ -232,9 +323,8 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
                   />
                 )}
 
-                {/* Node label */}
                 <text
-                  x={RIGHT_X + 10}
+                  x={RIGHT_X + 8}
                   y={showAllocInside ? labelY : f.dstY0 + 12}
                   fill="var(--text-primary)"
                   fontSize="10.5"
@@ -244,11 +334,11 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
                   {AGENT_LABELS[f.id]}
                 </text>
                 <text
-                  x={RIGHT_X + RIGHT_WIDTH - 10}
+                  x={RIGHT_X + RIGHT_WIDTH - 8}
                   y={showAllocInside ? labelY : f.dstY0 + 12}
                   textAnchor="end"
                   fill="var(--text-primary)"
-                  fontSize="11"
+                  fontSize="10.5"
                   fontWeight="600"
                   className="font-data"
                 >
@@ -257,7 +347,7 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
 
                 {f.unmet > 0.05 && f.unmetHeight >= 14 && (
                   <text
-                    x={RIGHT_X + RIGHT_WIDTH - 10}
+                    x={RIGHT_X + RIGHT_WIDTH - 8}
                     y={
                       showAllocInside
                         ? f.unmetY0 + f.unmetHeight / 2 + 3.5
@@ -274,6 +364,81 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
               </g>
             );
           })}
+
+          {/* Secondary Overlay Layer: Negotiation Conceded Bidding Share Annotations */}
+          {showConcessions && (
+            <g data-testid="power-flow-concessions-layer">
+              <text
+                x={NODE_RIGHT_EDGE + 12}
+                y={16}
+                fill="var(--accent-amber)"
+                fontSize="8.5"
+                fontWeight="600"
+                className="font-label"
+                style={{ letterSpacing: '0.05em' }}
+                opacity={0.9}
+              >
+                NEGOTIATION: CONCEDED BIDDING SHARE
+              </text>
+
+              {concessionAnnotations.length === 0 ? (
+                <text
+                  x={NODE_RIGHT_EDGE + 12}
+                  y={36}
+                  fill="var(--text-muted)"
+                  fontSize="9.5"
+                  className="font-data"
+                >
+                  No concessions this step
+                </text>
+              ) : (
+                concessionAnnotations.map((c) => {
+                  const bracketStartX = NODE_RIGHT_EDGE + 4;
+                  const bracketPath = `M ${bracketStartX} ${c.yFrom.toFixed(1)} L ${c.laneX} ${c.yFrom.toFixed(1)} L ${c.laneX} ${c.yTo.toFixed(1)} L ${bracketStartX + 2} ${c.yTo.toFixed(1)}`;
+                  const labelX =
+                    NODE_RIGHT_EDGE +
+                    18 +
+                    concessionAnnotations.length * 9;
+                  return (
+                    <g
+                      key={c.key}
+                      data-testid={`concession-annotation-${c.round}`}
+                    >
+                      <path
+                        d={bracketPath}
+                        fill="none"
+                        stroke="var(--accent-amber)"
+                        strokeWidth={1.15}
+                        strokeDasharray="3 2.5"
+                        opacity={0.85}
+                        markerStart="url(#concession-bracket-dot)"
+                        markerEnd="url(#concession-bracket-arrow)"
+                      />
+                      <line
+                        x1={c.laneX}
+                        y1={c.midY}
+                        x2={labelX - 4}
+                        y2={c.labelY - 3}
+                        stroke="var(--accent-amber)"
+                        strokeWidth={0.75}
+                        strokeDasharray="2 2"
+                        opacity={0.55}
+                      />
+                      <text
+                        x={labelX}
+                        y={c.labelY}
+                        fill="var(--accent-amber)"
+                        fontSize="9.5"
+                        className="font-data"
+                      >
+                        +{c.amountMw.toFixed(2)} MW freed by {c.fromLabel}
+                      </text>
+                    </g>
+                  );
+                })
+              )}
+            </g>
+          )}
         </svg>
       </div>
 
@@ -302,7 +467,9 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
                 : 'var(--status-safe)',
             }}
           >
-            {currentRecord.cascade_active ? 'ACTIVE (1.5× + PENALTY)' : 'INACTIVE'}
+            {currentRecord.cascade_active
+              ? 'ACTIVE (1.5× + PENALTY)'
+              : 'INACTIVE'}
           </div>
         </div>
         <div className="px-3.5 py-2.5">

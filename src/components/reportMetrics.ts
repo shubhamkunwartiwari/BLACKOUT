@@ -12,11 +12,8 @@ import { computeGapToOptimumPct, formatSignedPct } from './baselineMetrics';
 export type StrategyGrade = 'A' | 'B' | 'F';
 
 export interface HeadlineStatResult {
-  mode: 'prevented' | 'optimum_tracking';
   headline: string;
-  preventedPct: number;
   gapPct: number;
-  staticViolationsSoFar: number;
   oursViolationsSoFar: number;
 }
 
@@ -27,12 +24,9 @@ export function computeHeadlineStat(
 ): HeadlineStatResult {
   if (steps.length === 0) {
     return {
-      mode: 'optimum_tracking',
       headline:
         'Tracking 0.0% from the theoretical optimum, with zero safety violations',
-      preventedPct: 0,
       gapPct: 0,
-      staticViolationsSoFar: 0,
       oursViolationsSoFar: 0,
     };
   }
@@ -40,42 +34,17 @@ export function computeHeadlineStat(
   const clampedIdx = Math.min(Math.max(0, currentStep), steps.length - 1);
   const record = steps[clampedIdx];
 
-  let staticViolationsSoFar = 0;
   let oursViolationsSoFar = 0;
   for (let i = 0; i <= clampedIdx; i++) {
     const s = steps[i];
-    if (
-      hasMinViolation(agents, s.baselines.static.allocations, s.supply_mw)
-    ) {
-      staticViolationsSoFar += 1;
-    }
     if (hasMinViolation(agents, s.allocations, s.supply_mw)) {
       oursViolationsSoFar += 1;
     }
   }
 
   const oursDmg = record.damage_total;
-  const staticDmg = record.baselines.static.damage_total;
   const optDmg = record.baselines.lp_optimum.damage_total;
-
-  const preventedPct =
-    staticDmg > 1e-9 ? ((staticDmg - oursDmg) / staticDmg) * 100 : 0;
   const gapPct = computeGapToOptimumPct(oursDmg, optDmg);
-
-  if (
-    staticViolationsSoFar > 0 &&
-    oursViolationsSoFar === 0 &&
-    preventedPct > 0.05
-  ) {
-    return {
-      mode: 'prevented',
-      headline: `Our system has prevented ~${preventedPct.toFixed(1)}% more damage than static priority while keeping every agent above its safe minimum`,
-      preventedPct,
-      gapPct,
-      staticViolationsSoFar,
-      oursViolationsSoFar,
-    };
-  }
 
   const safetyClause =
     oursViolationsSoFar === 0
@@ -83,11 +52,8 @@ export function computeHeadlineStat(
       : `with ${oursViolationsSoFar} safety violations`;
 
   return {
-    mode: 'optimum_tracking',
     headline: `Tracking ${formatSignedPct(gapPct)} from the theoretical optimum, ${safetyClause}`,
-    preventedPct,
     gapPct,
-    staticViolationsSoFar,
     oursViolationsSoFar,
   };
 }

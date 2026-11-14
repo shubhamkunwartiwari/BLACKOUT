@@ -6,7 +6,9 @@ interface HeadlineStatBannerProps {
 
 export function HeadlineStatBanner({ stat }: HeadlineStatBannerProps) {
   const accentColor =
-    stat.mode === 'prevented' ? 'var(--status-safe)' : 'var(--accent-amber)';
+    stat.oursViolationsSoFar === 0
+      ? 'var(--accent-amber)'
+      : 'var(--status-critical)';
 
   return (
     <div
