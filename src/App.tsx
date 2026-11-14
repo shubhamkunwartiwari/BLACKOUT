@@ -68,6 +68,7 @@ export default function App() {
             <BaselineComparisonPanel
               currentRecord={currentRecord}
               summary={replay.summary}
+              selfTestResult={replay.selfTestResult}
             />
           </div>
         </div>
@@ -89,6 +90,7 @@ export default function App() {
       <ReportCardModal
         isOpen={replay.isReportOpen}
         summary={replay.summary}
+        selfTestResult={replay.selfTestResult}
         blackoutInjectedAt={replay.blackoutInjectedAt}
         onReplay={replay.replayFromStart}
         onClose={replay.closeReport}

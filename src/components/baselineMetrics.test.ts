@@ -7,6 +7,7 @@ import {
 } from '../sim';
 import {
   buildBaselineRows,
+  buildScenarioDamageBarData,
   buildScenarioResultsRows,
   computeDifferenceScale,
   computeGapToOptimumPct,
@@ -86,4 +87,30 @@ test('buildScenarioResultsRows returns final damage, avg fairness, and illegal t
     cascadeRows.find((r) => r.id === 'ours')!.finalDamage <
       cascadeRows.find((r) => r.id === 'lp_optimum')!.finalDamage
   );
+});
+
+test('buildScenarioDamageBarData computes scale, optimum reference, and signed deltas', () => {
+  const blackoutSummary = summarizeScenario(SUDDEN_BLACKOUT_SCENARIO);
+  const cascadeSummary = summarizeScenario(CASCADE_SCENARIO);
+
+  const data = buildScenarioDamageBarData([
+    {
+      scenarioName: blackoutSummary.scenarioName,
+      rows: buildScenarioResultsRows(blackoutSummary),
+    },
+    {
+      scenarioName: cascadeSummary.scenarioName,
+      rows: buildScenarioResultsRows(cascadeSummary),
+    },
+  ]);
+
+  assert.equal(data.scaleMax, 1200);
+  assert.deepEqual(data.ticks, [0, 600, 1200]);
+  assert.equal(data.blocks.length, 2);
+
+  const boOurs = data.blocks[0].bars.find((b) => b.id === 'ours')!;
+  const boOpt = data.blocks[0].bars.find((b) => b.id === 'lp_optimum')!;
+  assert.ok(boOurs.deltaVsOptimum < 0, 'ours beats optimum in sudden_blackout');
+  assert.equal(boOpt.deltaVsOptimum, 0);
+  assert.ok(boOurs.widthRatio > 0 && boOurs.widthRatio <= 1);
 });

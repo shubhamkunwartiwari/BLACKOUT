@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DEFAULT_AGENTS,
   DEFAULT_SCENARIOS,
+  runSelfTests,
   summarizeScenario,
   type Scenario,
   type ScenarioSummary,
+  type SelfTestResult,
   type StepRecord,
 } from '../sim';
 import {
@@ -34,6 +36,7 @@ export interface BlackoutReplayState {
   speed: ReplaySpeed;
   pulseKey: number;
   invariants: LiveInvariantChecks;
+  selfTestResult: SelfTestResult;
   isReportOpen: boolean;
   selectScenario: (name: string) => void;
   togglePlay: () => void;
@@ -75,6 +78,17 @@ export function useBlackoutReplay(): BlackoutReplayState {
     () => summarizeScenario(activeScenario, DEFAULT_AGENTS),
     [activeScenario]
   );
+
+  const selfTestResult = useMemo(() => runSelfTests(1000, DEFAULT_AGENTS, 100), []);
+
+  useEffect(() => {
+    console.info(
+      `[BLACKOUT Self-Test] tested across ${selfTestResult.curvesTested} randomized disaster curves, ${selfTestResult.failures.length} hard-constraint violations`
+    );
+    console.info(
+      `[BLACKOUT Adversarial Test] ${selfTestResult.adversarial.passed ? 'PASS' : 'FAIL'} — lying ${selfTestResult.adversarial.lyingAgentId} across ${selfTestResult.adversarial.scenariosTested} scenarios (+${selfTestResult.adversarial.extraDamageToOthers.toFixed(1)} total / +${selfTestResult.adversarial.avgExtraDamagePerScenario.toFixed(1)} avg extra dmg to others, ${selfTestResult.adversarial.failures.length} violations)`
+    );
+  }, [selfTestResult]);
 
   const steps = summary.steps;
   const clampedStep = Math.min(Math.max(0, currentStep), steps.length - 1);
@@ -186,6 +200,7 @@ export function useBlackoutReplay(): BlackoutReplayState {
     speed,
     pulseKey,
     invariants,
+    selfTestResult,
     isReportOpen,
     selectScenario,
     togglePlay,

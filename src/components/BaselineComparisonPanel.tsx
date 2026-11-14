@@ -1,16 +1,21 @@
-import type { ScenarioSummary, StepRecord } from '../sim';
+import type { ScenarioSummary, SelfTestResult, StepRecord } from '../sim';
 import { buildBaselineRows } from './baselineMetrics';
+import { formatAdversarialSummary, formatRobustnessStat } from './reportMetrics';
 
 interface BaselineComparisonPanelProps {
   currentRecord: StepRecord;
   summary: ScenarioSummary;
+  selfTestResult: SelfTestResult;
 }
 
 export function BaselineComparisonPanel({
   currentRecord,
   summary,
+  selfTestResult,
 }: BaselineComparisonPanelProps) {
   const rows = buildBaselineRows(currentRecord, summary);
+  const robustnessLine = formatRobustnessStat(selfTestResult);
+  const adversarialLine = formatAdversarialSummary(selfTestResult.adversarial);
 
   return (
     <div
@@ -92,6 +97,51 @@ export function BaselineComparisonPanel({
           })}
         </tbody>
       </table>
+
+      {/* Computed Self-Test Robustness & Adversarial Audit */}
+      <div
+        data-testid="verification-audit-strip"
+        className="mt-4 space-y-1.5 border-t border-[var(--border-hairline)] pt-3"
+      >
+        <div
+          data-testid="robustness-readout"
+          className="flex flex-wrap items-baseline justify-between gap-2"
+        >
+          <span className="font-label text-[10px] font-semibold text-[var(--text-muted)]">
+            Invariant Verification
+          </span>
+          <span
+            className="font-data text-[11px]"
+            style={{
+              color:
+                selfTestResult.failures.length === 0
+                  ? 'var(--status-safe)'
+                  : 'var(--status-critical)',
+            }}
+          >
+            {robustnessLine}
+          </span>
+        </div>
+
+        <div
+          data-testid="adversarial-readout"
+          className="flex flex-wrap items-baseline justify-between gap-2"
+        >
+          <span className="font-label text-[10px] font-semibold text-[var(--text-muted)]">
+            Adversarial Test
+          </span>
+          <span
+            className="font-data text-[11px]"
+            style={{
+              color: selfTestResult.adversarial.passed
+                ? 'var(--status-safe)'
+                : 'var(--status-critical)',
+            }}
+          >
+            {adversarialLine}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

@@ -185,3 +185,66 @@ export function buildScenarioResultsRows(
     },
   ];
 }
+
+export interface ScenarioDamageBarEntry extends ScenarioStrategyRow {
+  shortLabel: string;
+  deltaVsOptimum: number;
+  widthRatio: number;
+}
+
+export interface ScenarioDamageChartBlock {
+  scenarioName: string;
+  optimumDamage: number;
+  optimumRatio: number;
+  bars: ScenarioDamageBarEntry[];
+}
+
+export interface ScenarioDamageBarChartData {
+  scaleMax: number;
+  ticks: number[];
+  blocks: ScenarioDamageChartBlock[];
+}
+
+const SHORT_STRATEGY_LABELS: Record<ScenarioStrategyRow['id'], string> = {
+  ours: 'Ours',
+  lp_optimum: 'Optimum',
+  proportional: 'Proportional',
+  static: 'Static',
+};
+
+export function buildScenarioDamageBarData(
+  scenarioBlocks: ReadonlyArray<{
+    scenarioName: string;
+    rows: ScenarioStrategyRow[];
+  }>
+): ScenarioDamageBarChartData {
+  let maxVal = 100;
+  for (const block of scenarioBlocks) {
+    for (const row of block.rows) {
+      if (row.finalDamage > maxVal) maxVal = row.finalDamage;
+    }
+  }
+
+  const scaleMax = Math.max(200, Math.ceil((maxVal * 1.05) / 200) * 200);
+  const ticks = [0, Math.round(scaleMax / 2), scaleMax];
+
+  const blocks: ScenarioDamageChartBlock[] = scenarioBlocks.map((block) => {
+    const optimumRow = block.rows.find((r) => r.id === 'lp_optimum');
+    const optimumDamage = optimumRow ? optimumRow.finalDamage : 0;
+
+    return {
+      scenarioName: block.scenarioName,
+      optimumDamage,
+      optimumRatio: scaleMax > 0 ? Math.min(1, optimumDamage / scaleMax) : 0,
+      bars: block.rows.map((row) => ({
+        ...row,
+        shortLabel: SHORT_STRATEGY_LABELS[row.id],
+        deltaVsOptimum: row.finalDamage - optimumDamage,
+        widthRatio: scaleMax > 0 ? Math.min(1, Math.max(0, row.finalDamage / scaleMax)) : 0,
+      })),
+    };
+  });
+
+  return { scaleMax, ticks, blocks };
+}
+

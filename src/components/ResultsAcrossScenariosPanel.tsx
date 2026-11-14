@@ -6,6 +6,10 @@ import {
   summarizeScenario,
 } from '../sim';
 import { buildScenarioResultsRows } from './baselineMetrics';
+import {
+  ScenarioDamageBarChart,
+  STRATEGY_COLORS,
+} from './ScenarioDamageBarChart';
 
 function formatScenarioTitle(name: string): string {
   if (name === 'sudden_blackout') return 'sudden_blackout';
@@ -65,7 +69,7 @@ export function ResultsAcrossScenariosPanel() {
           </div>
 
           <span className="font-label text-[11px] font-medium text-[var(--text-secondary)]">
-            {isOpen ? 'Collapse' : 'Expand table'}
+            {isOpen ? 'Collapse' : 'Expand'}
           </span>
         </button>
 
@@ -73,96 +77,109 @@ export function ResultsAcrossScenariosPanel() {
           <div
             id="results-across-scenarios-body"
             data-testid="results-across-scenarios-body"
-            className="mt-4 overflow-x-auto border-t border-[var(--border-hairline)] pt-3"
+            className="mt-4 grid grid-cols-1 gap-6 border-t border-[var(--border-hairline)] pt-4 xl:grid-cols-[1.25fr_0.95fr] xl:items-start"
           >
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-[var(--border-hairline)]">
-                  <th className="py-2 pr-4 text-left font-label text-[10px] font-medium text-[var(--text-muted)]">
-                    Scenario
-                  </th>
-                  <th className="py-2 px-4 text-left font-label text-[10px] font-medium text-[var(--text-muted)]">
-                    Strategy
-                  </th>
-                  <th className="py-2 px-4 text-right font-label text-[10px] font-medium text-[var(--text-muted)]">
-                    Final Damage
-                  </th>
-                  <th className="py-2 px-4 text-right font-label text-[10px] font-medium text-[var(--text-muted)]">
-                    Avg Jain
-                  </th>
-                  <th className="py-2 pl-4 text-right font-label text-[10px] font-medium text-[var(--text-muted)]">
-                    Min Violations
-                  </th>
-                </tr>
-              </thead>
-              {scenarioBlocks.map((block, blockIdx) => (
-                <tbody
-                  key={block.scenarioName}
-                  className={
-                    blockIdx > 0
-                      ? 'border-t-2 border-[var(--border-strong)] divide-y divide-[var(--border-hairline)]'
-                      : 'divide-y divide-[var(--border-hairline)]'
-                  }
-                >
-                  {block.rows.map((row, rowIdx) => {
-                    const isOurs = row.id === 'ours';
-                    return (
-                      <tr
-                        key={`${block.scenarioName}-${row.id}`}
-                        data-testid={`scenario-result-row-${block.scenarioName}-${row.id}`}
-                        className={isOurs ? 'bg-[var(--bg-canvas)]' : undefined}
-                      >
-                        {rowIdx === 0 && (
-                          <td
-                            rowSpan={block.rows.length}
-                            className="py-2.5 pr-4 align-top font-data text-xs font-semibold text-[var(--text-primary)] whitespace-nowrap border-r border-[var(--border-hairline)]"
-                          >
-                            {formatScenarioTitle(block.scenarioName)}
-                          </td>
-                        )}
-                        <td className="py-2.5 px-4 align-top">
-                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                            <span
-                              className={`font-label text-xs font-semibold ${
-                                isOurs
-                                  ? 'text-[var(--accent-amber)]'
-                                  : 'text-[var(--text-primary)]'
-                              }`}
-                            >
-                              {row.label}
-                            </span>
-                            {row.isIllegal && (
-                              <span
-                                data-testid={`scenario-illegal-${block.scenarioName}-${row.id}`}
-                                className="font-data text-[11px] font-medium text-[var(--status-critical)]"
-                              >
-                                illegal: breaks minimum loads
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-4 text-right align-top font-data text-sm font-semibold text-[var(--text-primary)]">
-                          {row.finalDamage.toFixed(1)}
-                        </td>
-                        <td className="py-2.5 px-4 text-right align-top font-data text-xs text-[var(--text-secondary)]">
-                          {row.avgFairness.toFixed(3)}
-                        </td>
-                        <td
-                          className="py-2.5 pl-4 text-right align-top font-data text-xs font-semibold"
-                          style={{
-                            color: row.isIllegal
-                              ? 'var(--status-critical)'
-                              : 'var(--status-safe)',
-                          }}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-[var(--border-hairline)]">
+                    <th className="py-2 pr-4 text-left font-label text-[10px] font-medium text-[var(--text-muted)]">
+                      Scenario
+                    </th>
+                    <th className="py-2 px-4 text-left font-label text-[10px] font-medium text-[var(--text-muted)]">
+                      Strategy
+                    </th>
+                    <th className="py-2 px-4 text-right font-label text-[10px] font-medium text-[var(--text-muted)]">
+                      Final Damage
+                    </th>
+                    <th className="py-2 px-4 text-right font-label text-[10px] font-medium text-[var(--text-muted)]">
+                      Avg Jain
+                    </th>
+                    <th className="py-2 pl-4 text-right font-label text-[10px] font-medium text-[var(--text-muted)]">
+                      Min Violations
+                    </th>
+                  </tr>
+                </thead>
+                {scenarioBlocks.map((block, blockIdx) => (
+                  <tbody
+                    key={block.scenarioName}
+                    className={
+                      blockIdx > 0
+                        ? 'border-t-2 border-[var(--border-strong)] divide-y divide-[var(--border-hairline)]'
+                        : 'divide-y divide-[var(--border-hairline)]'
+                    }
+                  >
+                    {block.rows.map((row, rowIdx) => {
+                      const isOurs = row.id === 'ours';
+                      return (
+                        <tr
+                          key={`${block.scenarioName}-${row.id}`}
+                          data-testid={`scenario-result-row-${block.scenarioName}-${row.id}`}
+                          className={isOurs ? 'bg-[var(--bg-canvas)]' : undefined}
                         >
-                          {row.minViolations}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              ))}
-            </table>
+                          {rowIdx === 0 && (
+                            <td
+                              rowSpan={block.rows.length}
+                              className="py-2.5 pr-4 align-top font-data text-xs font-semibold text-[var(--text-primary)] whitespace-nowrap border-r border-[var(--border-hairline)]"
+                            >
+                              {formatScenarioTitle(block.scenarioName)}
+                            </td>
+                          )}
+                          <td className="py-2.5 px-4 align-top">
+                            <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                              <span className="inline-flex items-center gap-2">
+                                <span
+                                  className="inline-block h-2 w-2 shrink-0"
+                                  style={{
+                                    backgroundColor: STRATEGY_COLORS[row.id],
+                                  }}
+                                  aria-hidden="true"
+                                />
+                                <span
+                                  className={`font-label text-xs font-semibold ${
+                                    isOurs
+                                      ? 'text-[var(--accent-amber)]'
+                                      : 'text-[var(--text-primary)]'
+                                  }`}
+                                >
+                                  {row.label}
+                                </span>
+                              </span>
+                              {row.isIllegal && (
+                                <span
+                                  data-testid={`scenario-illegal-${block.scenarioName}-${row.id}`}
+                                  className="font-data text-[11px] font-medium text-[var(--status-critical)]"
+                                >
+                                  illegal: breaks minimum loads
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-4 text-right align-top font-data text-sm font-semibold text-[var(--text-primary)]">
+                            {row.finalDamage.toFixed(1)}
+                          </td>
+                          <td className="py-2.5 px-4 text-right align-top font-data text-xs text-[var(--text-secondary)]">
+                            {row.avgFairness.toFixed(3)}
+                          </td>
+                          <td
+                            className="py-2.5 pl-4 text-right align-top font-data text-xs font-semibold"
+                            style={{
+                              color: row.isIllegal
+                                ? 'var(--status-critical)'
+                                : 'var(--status-safe)',
+                            }}
+                          >
+                            {row.minViolations}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                ))}
+              </table>
+            </div>
+
+            <ScenarioDamageBarChart scenarioBlocks={scenarioBlocks} />
           </div>
         )}
       </div>

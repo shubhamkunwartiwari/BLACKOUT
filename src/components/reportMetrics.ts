@@ -3,8 +3,10 @@ import {
   DEFAULT_SCENARIOS,
   hasMinViolation,
   summarizeScenario,
+  type AdversarialTestResult,
   type Agent,
   type ScenarioSummary,
+  type SelfTestResult,
   type StepRecord,
 } from '../sim';
 import { computeGapToOptimumPct, formatSignedPct } from './baselineMetrics';
@@ -148,4 +150,15 @@ export function buildBaseScenarioTakeaways(): BaseScenarioTakeaway[] {
       takeaway,
     };
   });
+}
+
+export function formatRobustnessStat(result: SelfTestResult): string {
+  return `tested across ${result.curvesTested} randomized disaster curves, ${result.failures.length} hard-constraint violations`;
+}
+
+export function formatAdversarialSummary(adv: AdversarialTestResult): string {
+  const status = adv.passed ? 'PASS' : 'FAIL';
+  const sign = adv.extraDamageToOthers >= 0 ? '+' : '';
+  const avgSign = adv.avgExtraDamagePerScenario >= 0 ? '+' : '';
+  return `${status} · lying ${adv.lyingAgentId} across ${adv.scenariosTested} curves: ${sign}${adv.extraDamageToOthers.toFixed(1)} extra dmg to others (${avgSign}${adv.avgExtraDamagePerScenario.toFixed(1)}/run), ${adv.failures.length} invariant violations`;
 }

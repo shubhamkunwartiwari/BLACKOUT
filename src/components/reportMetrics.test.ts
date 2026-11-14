@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   CASCADE_SCENARIO,
   SUDDEN_BLACKOUT_SCENARIO,
+  runSelfTests,
   summarizeScenario,
 } from '../sim';
 import {
@@ -10,6 +11,8 @@ import {
   buildReportCardRows,
   computeHeadlineStat,
   computeStrategyGrade,
+  formatAdversarialSummary,
+  formatRobustnessStat,
 } from './reportMetrics';
 
 test('computeStrategyGrade assigns A, B, and F strictly per rules', () => {
@@ -72,4 +75,40 @@ test('buildReportCardRows and buildBaseScenarioTakeaways grade both base scenari
   assert.equal(takeaways[1].scenarioName, 'cascade');
   assert.match(takeaways[0].takeaway.headline, /^Tracking .* from the theoretical optimum/);
   assert.match(takeaways[1].takeaway.headline, /^Tracking .* from the theoretical optimum/);
+});
+
+test('formatRobustnessStat and formatAdversarialSummary compute text dynamically from runSelfTests(1000)', () => {
+  const result = runSelfTests(1000);
+  assert.equal(
+    formatRobustnessStat(result),
+    'tested across 1000 randomized disaster curves, 0 hard-constraint violations'
+  );
+  const advText = formatAdversarialSummary(result.adversarial);
+  assert.match(
+    advText,
+    /^PASS · lying telecom across 100 curves: \+\d+\.\d extra dmg to others \(\+\d+\.\d\/run\), 0 invariant violations$/
+  );
+
+  // Verify formatters reflect arbitrary values rather than hardcoding
+  const synthetic = {
+    ...result,
+    curvesTested: 250,
+    failures: ['err1', 'err2'],
+    adversarial: {
+      ...result.adversarial,
+      passed: false,
+      scenariosTested: 40,
+      extraDamageToOthers: 120.5,
+      avgExtraDamagePerScenario: 3.01,
+      failures: ['adv1'],
+    },
+  };
+  assert.equal(
+    formatRobustnessStat(synthetic),
+    'tested across 250 randomized disaster curves, 2 hard-constraint violations'
+  );
+  assert.equal(
+    formatAdversarialSummary(synthetic.adversarial),
+    'FAIL · lying telecom across 40 curves: +120.5 extra dmg to others (+3.0/run), 1 invariant violations'
+  );
 });

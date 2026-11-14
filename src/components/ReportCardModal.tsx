@@ -1,17 +1,20 @@
 import { RotateCcw, X } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
-import type { ScenarioSummary } from '../sim';
+import type { ScenarioSummary, SelfTestResult } from '../sim';
 import { formatSignedPct } from './baselineMetrics';
 import {
   buildBaseScenarioTakeaways,
   buildReportCardRows,
   computeHeadlineStat,
+  formatAdversarialSummary,
+  formatRobustnessStat,
   type StrategyGrade,
 } from './reportMetrics';
 
 interface ReportCardModalProps {
   isOpen: boolean;
   summary: ScenarioSummary;
+  selfTestResult: SelfTestResult;
   blackoutInjectedAt: number | null;
   onReplay: () => void;
   onClose: () => void;
@@ -35,6 +38,7 @@ const GRADE_STYLE: Record<StrategyGrade, { color: string; bg: string }> = {
 export function ReportCardModal({
   isOpen,
   summary,
+  selfTestResult,
   blackoutInjectedAt,
   onReplay,
   onClose,
@@ -230,6 +234,53 @@ export function ReportCardModal({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Verification & Adversarial Audit */}
+          <div className="mt-5 border-t border-[var(--border-hairline)] pt-4">
+            <h3 className="mb-2.5 font-label text-xs font-semibold text-[var(--text-secondary)]">
+              Verification &amp; Adversarial Audit
+            </h3>
+            <div className="space-y-2 border border-[var(--border-hairline)] bg-[var(--bg-canvas)] p-3.5">
+              <div
+                data-testid="report-robustness-stat"
+                className="flex flex-wrap items-baseline justify-between gap-2"
+              >
+                <span className="font-label text-[10px] font-semibold text-[var(--text-muted)]">
+                  Monte Carlo Invariant Suite
+                </span>
+                <span
+                  className="font-data text-xs font-semibold"
+                  style={{
+                    color:
+                      selfTestResult.failures.length === 0
+                        ? 'var(--status-safe)'
+                        : 'var(--status-critical)',
+                  }}
+                >
+                  {formatRobustnessStat(selfTestResult)}
+                </span>
+              </div>
+
+              <div
+                data-testid="report-adversarial-stat"
+                className="flex flex-wrap items-baseline justify-between gap-2 border-t border-[var(--border-hairline)] pt-2"
+              >
+                <span className="font-label text-[10px] font-semibold text-[var(--text-muted)]">
+                  Adversarial Test
+                </span>
+                <span
+                  className="font-data text-xs"
+                  style={{
+                    color: selfTestResult.adversarial.passed
+                      ? 'var(--status-safe)'
+                      : 'var(--status-critical)',
+                  }}
+                >
+                  {formatAdversarialSummary(selfTestResult.adversarial)}
+                </span>
+              </div>
             </div>
           </div>
 

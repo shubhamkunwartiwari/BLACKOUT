@@ -13,6 +13,7 @@ import {
   computeStepDamage,
   hasMinViolation,
   negotiateStep,
+  runAdversarialTests,
   runScenario,
   runSelfTests,
   sumAllocations,
@@ -202,6 +203,26 @@ test('1000 random supply curves pass all hard constraint assertions', () => {
   assert.equal(result.passed, true, `Self-test failures: ${result.failures.join(' | ')}`);
   assert.equal(result.curvesTested, 1000);
   assert.equal(result.stepsChecked, 72000);
+  assert.equal(result.adversarial.passed, true);
+  assert.equal(result.adversarial.scenariosTested, 100);
+  assert.equal(result.adversarial.stepsChecked, 7200);
+  assert.equal(result.adversarial.failures.length, 0);
+});
+
+test('adversarial lying agent distorts bidding and increases damage to others without breaking invariants', () => {
+  const adv = runAdversarialTests(100, DEFAULT_AGENTS, 'telecom');
+  assert.equal(adv.passed, true, `Adversarial failures: ${adv.failures.join(' | ')}`);
+  assert.equal(adv.scenariosTested, 100);
+  assert.equal(adv.stepsChecked, 7200);
+  assert.equal(adv.lyingAgentId, 'telecom');
+  assert.equal(adv.failures.length, 0);
+  assert.ok(
+    Number.isFinite(adv.extraDamageToOthers) && adv.extraDamageToOthers > 0,
+    `Expected lying agent to inflict positive extra damage on others, got ${adv.extraDamageToOthers}`
+  );
+  assert.ok(
+    Math.abs(adv.avgExtraDamagePerScenario - adv.extraDamageToOthers / 100) < 1e-9
+  );
 });
 
 test('shedding flag is true strictly when supply < sum(min_mw)', () => {

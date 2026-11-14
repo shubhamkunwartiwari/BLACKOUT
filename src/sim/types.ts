@@ -64,9 +64,20 @@ export interface ScenarioSummary {
   };
 }
 
+export interface AdversarialTestResult {
+  passed: boolean;
+  scenariosTested: number;
+  stepsChecked: number;
+  lyingAgentId: AgentId;
+  extraDamageToOthers: number;
+  avgExtraDamagePerScenario: number;
+  failures: string[];
+}
+
 export interface SelfTestResult {
   passed: boolean;
   curvesTested: number;
   stepsChecked: number;
   failures: string[];
+  adversarial: AdversarialTestResult;
 }
