@@ -7,7 +7,10 @@ import {
 } from '../sim';
 import {
   buildBaselineRows,
+  buildScenarioResultsRows,
+  computeDifferenceScale,
   computeGapToOptimumPct,
+  formatSignedDelta,
   formatSignedPct,
 } from './baselineMetrics';
 
@@ -18,6 +21,9 @@ test('computeGapToOptimumPct handles zero optimum and signed differences', () =>
   assert.equal(formatSignedPct(-0.82), '-0.8%');
   assert.equal(formatSignedPct(2.46), '+2.5%');
   assert.equal(formatSignedPct(-0.01), '0.0%');
+  assert.equal(formatSignedDelta(-7.92), '-7.9');
+  assert.equal(formatSignedDelta(7.58), '+7.6');
+  assert.equal(formatSignedDelta(-0.02), '0.0');
 });
 
 test('buildBaselineRows flags strategies with minViolations > 0 as illegal', () => {
@@ -47,4 +53,37 @@ test('buildBaselineRows flags strategies with minViolations > 0 as illegal', () 
   assert.equal(cascadeRows.find((r) => r.id === 'proportional')!.isIllegal, true);
   assert.equal(cascadeRows.find((r) => r.id === 'static')!.isIllegal, true);
   assert.equal(cascadeRows.find((r) => r.id === 'ours')!.isIllegal, false);
+});
+
+test('computeDifferenceScale brackets zero and includes zero tick', () => {
+  const blackoutSummary = summarizeScenario(SUDDEN_BLACKOUT_SCENARIO);
+  const scale = computeDifferenceScale(blackoutSummary.steps);
+  assert.ok(scale.min < 0, 'min should be negative when strategies beat optimum');
+  assert.ok(scale.max > 0, 'max should be positive when proportional exceeds optimum');
+  assert.ok(scale.ticks.includes(0), 'ticks must include 0 baseline');
+
+  const cascadeSummary = summarizeScenario(CASCADE_SCENARIO);
+  const cascadeScale = computeDifferenceScale(cascadeSummary.steps);
+  assert.ok(cascadeScale.min < 0);
+  assert.ok(cascadeScale.max > 0);
+  assert.ok(cascadeScale.ticks.includes(0));
+});
+
+test('buildScenarioResultsRows returns final damage, avg fairness, and illegal tags', () => {
+  const blackoutRows = buildScenarioResultsRows(
+    summarizeScenario(SUDDEN_BLACKOUT_SCENARIO)
+  );
+  assert.equal(blackoutRows.length, 4);
+  assert.equal(blackoutRows.find((r) => r.id === 'static')!.isIllegal, true);
+  assert.equal(blackoutRows.find((r) => r.id === 'ours')!.isIllegal, false);
+
+  const cascadeRows = buildScenarioResultsRows(
+    summarizeScenario(CASCADE_SCENARIO)
+  );
+  assert.equal(cascadeRows.find((r) => r.id === 'proportional')!.isIllegal, true);
+  assert.equal(cascadeRows.find((r) => r.id === 'static')!.isIllegal, true);
+  assert.ok(
+    cascadeRows.find((r) => r.id === 'ours')!.finalDamage <
+      cascadeRows.find((r) => r.id === 'lp_optimum')!.finalDamage
+  );
 });

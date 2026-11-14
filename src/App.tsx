@@ -2,6 +2,7 @@ import { BaselineComparisonPanel } from './components/BaselineComparisonPanel';
 import { CumulativeDamageChart } from './components/CumulativeDamageChart';
 import { HeaderStrip } from './components/HeaderStrip';
 import { HeroSupplyChart } from './components/HeroSupplyChart';
+import { ResultsAcrossScenariosPanel } from './components/ResultsAcrossScenariosPanel';
 import {
   AGENT_COLOR_VARS,
   AGENT_DISPLAY_ORDER,
@@ -152,6 +153,9 @@ export default function App() {
           blackoutInjectedAt={replay.blackoutInjectedAt}
           onSeek={replay.seek}
         />
+
+        {/* Collapsible Results Across Scenarios Table */}
+        <ResultsAcrossScenariosPanel />
       </main>
     </div>
   );

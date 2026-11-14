@@ -2,7 +2,14 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { formatStepTime } from '../hooks/replayHelpers';
 import { useTweenedNumber } from '../hooks/useTweenedNumber';
 import type { ScenarioSummary, StepRecord } from '../sim';
-import { computeGapToOptimumPct, formatSignedPct } from './baselineMetrics';
+import {
+  computeDifferenceScale,
+  computeGapToOptimumPct,
+  formatSignedDelta,
+  formatSignedPct,
+} from './baselineMetrics';
+
+type DamageViewMode = 'absolute' | 'difference';
 
 interface CumulativeDamageChartProps {
   steps: StepRecord[];
@@ -73,16 +80,19 @@ export function CumulativeDamageChart({
 }: CumulativeDamageChartProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [viewMode, setViewMode] = useState<DamageViewMode>('absolute');
 
   const maxStep = Math.max(1, steps.length - 1);
   const currentRecord = steps[currentStep] ?? steps[0];
 
   const oursDmg = currentRecord.damage_total;
   const optimumDmg = currentRecord.baselines.lp_optimum.damage_total;
+  const diffOursVsOpt = oursDmg - optimumDmg;
   const gapPct = computeGapToOptimumPct(oursDmg, optimumDmg);
 
   const tweenedOurs = useTweenedNumber(oursDmg);
   const tweenedOptimum = useTweenedNumber(optimumDmg);
+  const tweenedDiff = useTweenedNumber(diffOursVsOpt);
 
   const maxDamage = useMemo(() => {
     let peak = 100;
@@ -98,17 +108,34 @@ export function CumulativeDamageChart({
     return Math.ceil(peak / 200) * 200;
   }, [steps]);
 
+  const diffScale = useMemo(() => computeDifferenceScale(steps), [steps]);
+
+  const yDomainMin = viewMode === 'absolute' ? 0 : diffScale.min;
+  const yDomainMax = viewMode === 'absolute' ? maxDamage : diffScale.max;
+
   const xAt = useCallback(
     (t: number) => PAD_LEFT + (t / maxStep) * PLOT_WIDTH,
     [maxStep]
   );
 
   const yAt = useCallback(
-    (dmg: number) => {
-      const clamped = Math.max(0, Math.min(maxDamage, dmg));
-      return PAD_TOP + PLOT_HEIGHT - (clamped / maxDamage) * PLOT_HEIGHT;
+    (val: number) => {
+      const span = Math.max(1e-6, yDomainMax - yDomainMin);
+      const clamped = Math.max(yDomainMin, Math.min(yDomainMax, val));
+      return (
+        PAD_TOP + PLOT_HEIGHT - ((clamped - yDomainMin) / span) * PLOT_HEIGHT
+      );
     },
-    [maxDamage]
+    [yDomainMin, yDomainMax]
+  );
+
+  const getPlotValue = useCallback(
+    (spec: SeriesSpec, s: StepRecord) => {
+      const raw = spec.getValue(s);
+      if (viewMode === 'absolute') return raw;
+      return raw - s.baselines.lp_optimum.damage_total;
+    },
+    [viewMode]
   );
 
   const seriesPaths = useMemo(() => {
@@ -116,17 +143,17 @@ export function CumulativeDamageChart({
       const fullPath = steps
         .map(
           (s, idx) =>
-            `${idx === 0 ? 'M' : 'L'} ${xAt(idx).toFixed(2)} ${yAt(spec.getValue(s)).toFixed(2)}`
+            `${idx === 0 ? 'M' : 'L'} ${xAt(idx).toFixed(2)} ${yAt(getPlotValue(spec, s)).toFixed(2)}`
         )
         .join(' ');
       const activePath = steps
         .slice(0, currentStep + 1)
         .map(
           (s, idx) =>
-            `${idx === 0 ? 'M' : 'L'} ${xAt(idx).toFixed(2)} ${yAt(spec.getValue(s)).toFixed(2)}`
+            `${idx === 0 ? 'M' : 'L'} ${xAt(idx).toFixed(2)} ${yAt(getPlotValue(spec, s)).toFixed(2)}`
         )
         .join(' ');
-      const currentVal = spec.getValue(currentRecord);
+      const currentVal = getPlotValue(spec, currentRecord);
       return {
         ...spec,
         fullPath,
@@ -134,7 +161,7 @@ export function CumulativeDamageChart({
         currentY: yAt(currentVal),
       };
     });
-  }, [steps, currentStep, currentRecord, xAt, yAt]);
+  }, [steps, currentStep, currentRecord, xAt, yAt, getPlotValue]);
 
   const scrubFromPointer = useCallback(
     (clientX: number) => {
@@ -170,13 +197,16 @@ export function CumulativeDamageChart({
     }
   };
 
-  const yTicks = [
-    0,
-    Math.round(maxDamage * 0.25),
-    Math.round(maxDamage * 0.5),
-    Math.round(maxDamage * 0.75),
-    maxDamage,
-  ];
+  const yTicks =
+    viewMode === 'absolute'
+      ? [
+          0,
+          Math.round(maxDamage * 0.25),
+          Math.round(maxDamage * 0.5),
+          Math.round(maxDamage * 0.75),
+          maxDamage,
+        ]
+      : diffScale.ticks;
   const xTicks = [0, 10, 20, 30, 40, 50, 60, 71];
   const playheadX = xAt(currentStep);
 
@@ -186,18 +216,21 @@ export function CumulativeDamageChart({
   return (
     <section
       aria-labelledby="damage-chart-heading"
+      data-testid="damage-chart-panel"
       className="border-t border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-6 py-5"
     >
       <div className="mx-auto max-w-[1600px]">
-        {/* Header & Gap-to-Optimum Readout */}
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
-          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+        {/* Header, View Mode Toggle & Gap-to-Optimum Readout */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
+          <div className="flex flex-wrap items-baseline gap-x-7 gap-y-2">
             <div>
               <h2
                 id="damage-chart-heading"
                 className="font-label text-xs font-semibold text-[var(--text-secondary)]"
               >
-                Cumulative Damage — Strategy Comparison
+                {viewMode === 'absolute'
+                  ? 'Cumulative Damage — Strategy Comparison'
+                  : 'Damage Difference vs Myopic Optimum (Strategy − Optimum)'}
               </h2>
             </div>
 
@@ -237,47 +270,87 @@ export function CumulativeDamageChart({
                 >
                   {formatSignedPct(gapPct)}
                 </span>
+                <span
+                  data-testid="damage-diff-readout"
+                  className="font-data text-xs text-[var(--text-secondary)]"
+                >
+                  ({formatSignedDelta(tweenedDiff)})
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Series Legend */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5">
-            {SERIES.map((spec) => {
-              const hasViolations =
-                spec.id !== 'ours' && summary.minViolations[spec.id] > 0;
-              return (
-                <div
-                  key={spec.id}
-                  className="flex items-center gap-2 whitespace-nowrap"
-                >
-                  <svg
-                    width="18"
-                    height="8"
-                    viewBox="0 0 18 8"
-                    aria-hidden="true"
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            {/* Series Legend */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              {SERIES.map((spec) => {
+                const hasViolations =
+                  spec.id !== 'ours' && summary.minViolations[spec.id] > 0;
+                return (
+                  <div
+                    key={spec.id}
+                    className="flex items-center gap-2 whitespace-nowrap"
                   >
-                    <line
-                      x1="0"
-                      y1="4"
-                      x2="18"
-                      y2="4"
-                      stroke={spec.color}
-                      strokeWidth={spec.strokeWidth}
-                      strokeDasharray={spec.dashArray}
-                    />
-                  </svg>
-                  <span className="font-label text-[11px] text-[var(--text-secondary)]">
-                    {spec.label}
-                  </span>
-                  {hasViolations && (
-                    <span className="font-data text-[10px] text-[var(--status-critical)]">
-                      (illegal)
+                    <svg
+                      width="18"
+                      height="8"
+                      viewBox="0 0 18 8"
+                      aria-hidden="true"
+                    >
+                      <line
+                        x1="0"
+                        y1="4"
+                        x2="18"
+                        y2="4"
+                        stroke={spec.color}
+                        strokeWidth={spec.strokeWidth}
+                        strokeDasharray={spec.dashArray}
+                      />
+                    </svg>
+                    <span className="font-label text-[11px] text-[var(--text-secondary)]">
+                      {spec.label}
                     </span>
-                  )}
-                </div>
-              );
-            })}
+                    {hasViolations && (
+                      <span className="font-data text-[10px] text-[var(--status-critical)]">
+                        (illegal)
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Absolute / Difference vs optimum toggle */}
+            <div
+              className="inline-flex h-8 border border-[var(--border-strong)] bg-[var(--bg-surface)] shrink-0"
+              role="group"
+              aria-label="Damage chart mode"
+            >
+              {(
+                [
+                  { id: 'absolute', label: 'Absolute' },
+                  { id: 'difference', label: 'Difference vs optimum' },
+                ] as const
+              ).map((mode) => {
+                const active = viewMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    data-testid={`damage-mode-${mode.id}`}
+                    aria-pressed={active}
+                    onClick={() => setViewMode(mode.id)}
+                    className={`px-3 font-label text-[10px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent-amber)] whitespace-nowrap cursor-pointer ${
+                      active
+                        ? 'bg-[var(--accent-amber-soft)] text-[var(--accent-amber)]'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -288,7 +361,11 @@ export function CumulativeDamageChart({
             viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
             className="block h-[210px] w-full cursor-crosshair select-none touch-none sm:h-[230px]"
             role="img"
-            aria-label="Cumulative damage line chart comparing ours against static, proportional, and myopic optimum"
+            aria-label={
+              viewMode === 'absolute'
+                ? 'Cumulative damage line chart comparing ours against static, proportional, and myopic optimum'
+                : 'Damage difference versus myopic optimum line chart showing strategy damage minus optimum damage per timestep'
+            }
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -297,6 +374,7 @@ export function CumulativeDamageChart({
             {/* Y-axis gridlines & labels */}
             {yTicks.map((val) => {
               const y = yAt(val);
+              const isZeroDiffLine = viewMode === 'difference' && val === 0;
               return (
                 <g key={val}>
                   <line
@@ -304,22 +382,46 @@ export function CumulativeDamageChart({
                     y1={y}
                     x2={SVG_WIDTH - PAD_RIGHT}
                     y2={y}
-                    stroke="var(--border-hairline)"
-                    strokeWidth={1}
+                    stroke={
+                      isZeroDiffLine
+                        ? 'var(--status-safe)'
+                        : 'var(--border-hairline)'
+                    }
+                    strokeWidth={isZeroDiffLine ? 1.25 : 1}
+                    strokeDasharray={isZeroDiffLine ? '4 3' : undefined}
+                    opacity={isZeroDiffLine ? 0.65 : 1}
                   />
                   <text
                     x={PAD_LEFT - 10}
                     y={y + 4}
                     textAnchor="end"
-                    fill="var(--text-muted)"
+                    fill={
+                      isZeroDiffLine
+                        ? 'var(--status-safe)'
+                        : 'var(--text-muted)'
+                    }
                     fontSize="11"
                     className="font-data"
                   >
-                    {val}
+                    {viewMode === 'difference' && val > 0 ? `+${val}` : val}
                   </text>
                 </g>
               );
             })}
+
+            {viewMode === 'difference' && (
+              <text
+                x={SVG_WIDTH - PAD_RIGHT - 6}
+                y={yAt(0) - 6}
+                textAnchor="end"
+                fill="var(--status-safe)"
+                fontSize="10"
+                className="font-label"
+                opacity={0.85}
+              >
+                0 = MYOPIC OPTIMUM (BELOW IS BETTER)
+              </text>
+            )}
 
             {/* Future horizon lines (dimmed) */}
             {seriesPaths.map((s) => (

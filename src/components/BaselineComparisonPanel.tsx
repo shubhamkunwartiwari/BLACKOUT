@@ -38,8 +38,8 @@ export function BaselineComparisonPanel({
             <th className="py-1.5 px-3 text-right font-label text-[10px] font-medium text-[var(--text-muted)]">
               Avg Jain
             </th>
-            <th className="py-1.5 pl-3 text-right font-label text-[10px] font-medium text-[var(--text-muted)]">
-              Min Violations
+            <th className="py-1.5 pl-3 text-right font-label text-[10px] font-medium text-[var(--text-muted)] whitespace-nowrap">
+              MIN VIOLATIONS (FULL RUN)
             </th>
           </tr>
         </thead>
