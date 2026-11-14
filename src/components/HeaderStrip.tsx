@@ -1,4 +1,4 @@
-import { Pause, Play, RotateCcw, Zap } from 'lucide-react';
+import { FileText, Pause, Play, RotateCcw, Zap } from 'lucide-react';
 import type {
   InvariantStatus,
   LiveInvariantChecks,
@@ -18,6 +18,7 @@ interface HeaderStripProps {
   onSetSpeed: (speed: ReplaySpeed) => void;
   onTriggerBlackout: () => void;
   onReset: () => void;
+  onOpenReport: () => void;
 }
 
 const STATUS_STYLE: Record<
@@ -47,6 +48,7 @@ export function HeaderStrip({
   onSetSpeed,
   onTriggerBlackout,
   onReset,
+  onOpenReport,
 }: HeaderStripProps) {
   const capStyle = STATUS_STYLE[invariants.supplyCapStatus];
   const minStyle = STATUS_STYLE[invariants.minFloorStatus];
@@ -171,8 +173,18 @@ export function HeaderStrip({
 
           <button
             type="button"
+            data-testid="view-report-btn"
+            onClick={onOpenReport}
+            className="inline-flex h-9 items-center gap-1.5 border border-[var(--border-strong)] bg-[var(--bg-elevated)] px-3 font-label text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-control)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-amber)] whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>View Report</span>
+          </button>
+
+          <button
+            type="button"
             onClick={onTriggerBlackout}
-            className="inline-flex h-9 items-center gap-1.5 border border-[var(--status-critical)] bg-[var(--status-critical-soft)] px-3.5 font-label text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--status-critical)] hover:text-[var(--bg-canvas)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--status-critical)] whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex h-9 items-center gap-1.5 border border-[var(--status-critical)] bg-[var(--status-critical-soft)] px-3 font-label text-xs font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--status-critical)] hover:text-[var(--bg-canvas)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--status-critical)] whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Zap className="h-3.5 w-3.5" aria-hidden="true" />
             <span>

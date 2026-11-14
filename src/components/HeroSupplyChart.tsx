@@ -38,6 +38,7 @@ export function HeroSupplyChart({
 }: HeroSupplyChartProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showGhostStatic, setShowGhostStatic] = useState(false);
 
   const maxStep = Math.max(1, steps.length - 1);
   const currentRecord = steps[currentStep] ?? steps[0];
@@ -446,23 +447,46 @@ export function HeroSupplyChart({
               data-testid="hero-agent-bars"
               className="flex flex-col justify-between p-4"
             >
-              <div className="mb-3 flex items-baseline justify-between gap-4">
-                <h3 className="font-label text-xs font-semibold text-[var(--text-secondary)]">
-                  Allocation vs Demand by Agent
-                </h3>
-                <span className="font-data text-[11px] text-[var(--text-muted)]">
-                  | MARKER = MIN SAFE LOAD
-                </span>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="flex items-baseline gap-3">
+                  <h3 className="font-label text-xs font-semibold text-[var(--text-secondary)]">
+                    Allocation vs Demand by Agent
+                  </h3>
+                  <span className="font-data text-[10px] text-[var(--text-muted)]">
+                    | MIN LOAD
+                  </span>
+                </div>
+
+                <label className="inline-flex items-center gap-2 border border-[var(--border-hairline)] bg-[var(--bg-canvas)] px-2.5 py-1 cursor-pointer select-none hover:border-[var(--border-strong)]">
+                  <input
+                    type="checkbox"
+                    data-testid="ghost-mode-toggle"
+                    checked={showGhostStatic}
+                    onChange={(e) => setShowGhostStatic(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-[var(--accent-amber)] cursor-pointer"
+                  />
+                  <span className="font-label text-[10px] font-medium text-[var(--text-secondary)]">
+                    Show what static priority would have done
+                  </span>
+                </label>
               </div>
 
               <div className="flex flex-1 flex-col justify-center gap-3.5">
                 {AGENT_DISPLAY_ORDER.map((id) => {
                   const agent = DEFAULT_AGENTS.find((a) => a.id === id)!;
                   const alloc = currentRecord.allocations[id];
+                  const staticAlloc =
+                    currentRecord.baselines.static.allocations[id];
+                  const staticBelowMin = staticAlloc < agent.min_mw - 1e-6;
+
                   const demandPctOfMax = (agent.demand_mw / MAX_AGENT_DEMAND_MW) * 100;
                   const allocPctOfDemand = Math.min(
                     100,
                     Math.max(0, (alloc / agent.demand_mw) * 100)
+                  );
+                  const staticPctOfDemand = Math.min(
+                    100,
+                    Math.max(0, (staticAlloc / agent.demand_mw) * 100)
                   );
                   const minPctOfDemand = (agent.min_mw / agent.demand_mw) * 100;
 
@@ -488,38 +512,76 @@ export function HeroSupplyChart({
                       data-testid={`hero-bar-${id}`}
                       className="grid grid-cols-[140px_1fr_140px] items-center gap-3"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="inline-block h-2.5 w-2.5 shrink-0"
-                          style={{ backgroundColor: AGENT_COLOR_VARS[id] }}
-                          aria-hidden="true"
-                        />
-                        <span className="font-label text-xs font-semibold text-[var(--text-primary)] truncate">
-                          {AGENT_LABELS[id]}
-                        </span>
-                        <span className="font-data text-[10px] text-[var(--text-muted)]">
-                          P{agent.priority}
-                        </span>
+                      <div className="flex flex-col justify-center min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="inline-block h-2.5 w-2.5 shrink-0"
+                            style={{ backgroundColor: AGENT_COLOR_VARS[id] }}
+                            aria-hidden="true"
+                          />
+                          <span className="font-label text-xs font-semibold text-[var(--text-primary)] truncate">
+                            {AGENT_LABELS[id]}
+                          </span>
+                          <span className="font-data text-[10px] text-[var(--text-muted)]">
+                            P{agent.priority}
+                          </span>
+                        </div>
+                        {showGhostStatic && staticBelowMin && (
+                          <span
+                            data-testid={`ghost-below-min-${id}`}
+                            className="mt-0.5 pl-4.5 font-data text-[9px] font-semibold tracking-wide text-[var(--status-critical)] whitespace-nowrap"
+                          >
+                            BELOW SAFE MINIMUM
+                          </span>
+                        )}
                       </div>
 
                       {/* Bar scaled against shared 30 MW max demand axis */}
-                      <div className="relative h-5 w-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)]">
+                      <div className="relative h-6 w-full bg-[var(--bg-canvas)] border border-[var(--border-hairline)]">
                         <div
                           className="relative h-full bg-[var(--bg-elevated)] border-r border-dashed border-[var(--border-strong)]"
                           style={{ width: `${demandPctOfMax}%` }}
-                          title={`${AGENT_LABELS[id]} demand: ${agent.demand_mw} MW, min: ${agent.min_mw} MW`}
+                          title={`${AGENT_LABELS[id]} demand: ${agent.demand_mw} MW, min: ${agent.min_mw} MW${
+                            showGhostStatic
+                              ? `, static priority: ${staticAlloc.toFixed(1)} MW`
+                              : ''
+                          }`}
                         >
+                          {/* Static Priority Ghost Overlay Bar (behind live bar) */}
+                          {showGhostStatic && (
+                            <div
+                              data-testid={`ghost-bar-${id}`}
+                              data-below-min={staticBelowMin ? 'true' : 'false'}
+                              className={`absolute inset-y-0 left-0 z-0 transition-[width] duration-200 ${
+                                staticBelowMin
+                                  ? 'border-2 border-[var(--status-critical)] bg-[var(--status-critical-soft)]'
+                                  : 'border border-dashed border-[var(--text-secondary)] bg-white/10'
+                              }`}
+                              style={{
+                                width:
+                                  staticAlloc <= 0.05
+                                    ? '4px'
+                                    : `${staticPctOfDemand}%`,
+                              }}
+                              aria-hidden="true"
+                            />
+                          )}
+
+                          {/* Live Allocation Bar */}
                           <div
-                            className="h-full transition-[width] duration-200"
+                            className={`relative z-10 transition-[width] duration-200 ${
+                              showGhostStatic ? 'my-1 h-4' : 'h-full'
+                            }`}
                             style={{
                               width: `${allocPctOfDemand}%`,
                               backgroundColor: AGENT_COLOR_VARS[id],
-                              opacity: 0.88,
+                              opacity: showGhostStatic ? 0.85 : 0.9,
                             }}
                           />
+
                           {/* Minimum safe load tick */}
                           <div
-                            className="absolute top-0 bottom-0 w-0.5 bg-[var(--text-primary)]"
+                            className="absolute top-0 bottom-0 z-20 w-0.5 bg-[var(--text-primary)]"
                             style={{ left: `${minPctOfDemand}%` }}
                             aria-hidden="true"
                           />

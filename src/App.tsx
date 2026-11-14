@@ -1,15 +1,24 @@
+import { useMemo } from 'react';
 import { BaselineComparisonPanel } from './components/BaselineComparisonPanel';
 import { CumulativeDamageChart } from './components/CumulativeDamageChart';
 import { HeaderStrip } from './components/HeaderStrip';
+import { HeadlineStatBanner } from './components/HeadlineStatBanner';
 import { HeroSupplyChart } from './components/HeroSupplyChart';
 import { NegotiationVisualizer } from './components/NegotiationVisualizer';
 import { PowerFlowDiagram } from './components/PowerFlowDiagram';
+import { ReportCardModal } from './components/ReportCardModal';
+import { computeHeadlineStat } from './components/reportMetrics';
 import { ResultsAcrossScenariosPanel } from './components/ResultsAcrossScenariosPanel';
 import { useBlackoutReplay } from './hooks/useBlackoutReplay';
 
 export default function App() {
   const replay = useBlackoutReplay();
   const { currentRecord } = replay;
+
+  const headlineStat = useMemo(
+    () => computeHeadlineStat(replay.steps, replay.currentStep),
+    [replay.steps, replay.currentStep]
+  );
 
   return (
     <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)]">
@@ -21,6 +30,9 @@ export default function App() {
           aria-hidden="true"
         />
       )}
+
+      {/* Headline Stat: Top of Page Above Everything Else */}
+      <HeadlineStatBanner stat={headlineStat} />
 
       <HeaderStrip
         scenarios={replay.baseScenarios}
@@ -34,10 +46,11 @@ export default function App() {
         onSetSpeed={replay.setSpeed}
         onTriggerBlackout={replay.triggerBlackout}
         onReset={replay.resetScenario}
+        onOpenReport={replay.openReport}
       />
 
       <main>
-        {/* Simplified Hero Row: Side-by-Side Grid Supply Line & Live Agent Horizontal Bars */}
+        {/* Simplified Hero Row: Side-by-Side Grid Supply Line & Live Agent Horizontal Bars (+ Ghost Mode) */}
         <HeroSupplyChart
           steps={replay.steps}
           currentStep={replay.currentStep}
@@ -71,6 +84,15 @@ export default function App() {
           onSeek={replay.seek}
         />
       </main>
+
+      {/* End-of-Run Report Card Modal */}
+      <ReportCardModal
+        isOpen={replay.isReportOpen}
+        summary={replay.summary}
+        blackoutInjectedAt={replay.blackoutInjectedAt}
+        onReplay={replay.replayFromStart}
+        onClose={replay.closeReport}
+      />
     </div>
   );
 }

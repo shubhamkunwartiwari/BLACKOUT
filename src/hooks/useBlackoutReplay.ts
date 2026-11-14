@@ -34,12 +34,16 @@ export interface BlackoutReplayState {
   speed: ReplaySpeed;
   pulseKey: number;
   invariants: LiveInvariantChecks;
+  isReportOpen: boolean;
   selectScenario: (name: string) => void;
   togglePlay: () => void;
   setSpeed: (speed: ReplaySpeed) => void;
   seek: (step: number) => void;
   triggerBlackout: () => void;
   resetScenario: () => void;
+  openReport: () => void;
+  closeReport: () => void;
+  replayFromStart: () => void;
 }
 
 export function useBlackoutReplay(): BlackoutReplayState {
@@ -53,6 +57,7 @@ export function useBlackoutReplay(): BlackoutReplayState {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [speed, setSpeed] = useState<ReplaySpeed>(1);
   const [pulseKey, setPulseKey] = useState<number>(0);
+  const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
 
   const baseScenario = useMemo(
     () =>
@@ -89,34 +94,41 @@ export function useBlackoutReplay(): BlackoutReplayState {
     }
   }, [clampedStep, currentRecord.supply_mw, steps]);
 
-  // Playback timer
+  // Playback timer (pure React effect, no side effects inside state updaters)
   useEffect(() => {
     if (!isPlaying) return;
 
-    const timer = window.setInterval(() => {
-      setCurrentStep((prev) => {
-        if (prev >= steps.length - 1) {
-          setIsPlaying(false);
-          return prev;
-        }
-        return prev + 1;
-      });
+    if (clampedStep >= steps.length - 1) {
+      setIsPlaying(false);
+      setIsReportOpen(true);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const next = clampedStep + 1;
+      setCurrentStep(next);
+      if (next >= steps.length - 1) {
+        setIsPlaying(false);
+        setIsReportOpen(true);
+      }
     }, SPEED_INTERVAL_MS[speed]);
 
-    return () => window.clearInterval(timer);
-  }, [isPlaying, speed, steps.length]);
+    return () => window.clearTimeout(timer);
+  }, [isPlaying, clampedStep, speed, steps.length]);
 
   const selectScenario = useCallback((name: string) => {
     setSelectedScenarioName(name);
     setBlackoutInjectedAt(null);
     setCurrentStep(0);
     setIsPlaying(false);
+    setIsReportOpen(false);
   }, []);
 
   const togglePlay = useCallback(() => {
     setIsPlaying((prev) => {
       if (!prev && clampedStep >= steps.length - 1) {
         setCurrentStep(0);
+        setIsReportOpen(false);
       }
       return !prev;
     });
@@ -139,6 +151,21 @@ export function useBlackoutReplay(): BlackoutReplayState {
     setBlackoutInjectedAt(null);
     setCurrentStep(0);
     setIsPlaying(false);
+    setIsReportOpen(false);
+  }, []);
+
+  const openReport = useCallback(() => {
+    setIsReportOpen(true);
+  }, []);
+
+  const closeReport = useCallback(() => {
+    setIsReportOpen(false);
+  }, []);
+
+  const replayFromStart = useCallback(() => {
+    setCurrentStep(0);
+    setIsPlaying(false);
+    setIsReportOpen(false);
   }, []);
 
   const invariants = useMemo(
@@ -159,11 +186,15 @@ export function useBlackoutReplay(): BlackoutReplayState {
     speed,
     pulseKey,
     invariants,
+    isReportOpen,
     selectScenario,
     togglePlay,
     setSpeed,
     seek,
     triggerBlackout,
     resetScenario,
+    openReport,
+    closeReport,
+    replayFromStart,
   };
 }
