@@ -81,6 +81,21 @@ export function CumulativeDamageChart({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [viewMode, setViewMode] = useState<DamageViewMode>('absolute');
+  const [showProportional, setShowProportional] = useState(false);
+  const [showStatic, setShowStatic] = useState(false);
+
+  const visibleSeries = useMemo(() => {
+    return SERIES.filter((spec) => {
+      if (spec.id === 'proportional') return showProportional;
+      if (spec.id === 'static') return showStatic;
+      return true;
+    });
+  }, [showProportional, showStatic]);
+
+  const visibleIds = useMemo(
+    () => visibleSeries.map((s) => s.id),
+    [visibleSeries]
+  );
 
   const maxStep = Math.max(1, steps.length - 1);
   const currentRecord = steps[currentStep] ?? steps[0];
@@ -97,18 +112,17 @@ export function CumulativeDamageChart({
   const maxDamage = useMemo(() => {
     let peak = 100;
     for (const step of steps) {
-      peak = Math.max(
-        peak,
-        step.damage_total,
-        step.baselines.lp_optimum.damage_total,
-        step.baselines.proportional.damage_total,
-        step.baselines.static.damage_total
-      );
+      for (const spec of visibleSeries) {
+        peak = Math.max(peak, spec.getValue(step));
+      }
     }
     return Math.ceil(peak / 200) * 200;
-  }, [steps]);
+  }, [steps, visibleSeries]);
 
-  const diffScale = useMemo(() => computeDifferenceScale(steps), [steps]);
+  const diffScale = useMemo(
+    () => computeDifferenceScale(steps, visibleIds),
+    [steps, visibleIds]
+  );
 
   const yDomainMin = viewMode === 'absolute' ? 0 : diffScale.min;
   const yDomainMax = viewMode === 'absolute' ? maxDamage : diffScale.max;
@@ -139,7 +153,7 @@ export function CumulativeDamageChart({
   );
 
   const seriesPaths = useMemo(() => {
-    return SERIES.map((spec) => {
+    return visibleSeries.map((spec) => {
       const fullPath = steps
         .map(
           (s, idx) =>
@@ -161,7 +175,7 @@ export function CumulativeDamageChart({
         currentY: yAt(currentVal),
       };
     });
-  }, [steps, currentStep, currentRecord, xAt, yAt, getPlotValue]);
+  }, [visibleSeries, steps, currentStep, currentRecord, xAt, yAt, getPlotValue]);
 
   const scrubFromPointer = useCallback(
     (clientX: number) => {
@@ -281,40 +295,87 @@ export function CumulativeDamageChart({
           </div>
 
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            {/* Series Legend */}
+            {/* Series Legend + Baseline Checkboxes */}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
               {SERIES.map((spec) => {
+                const isOptional =
+                  spec.id === 'proportional' || spec.id === 'static';
+                const checked =
+                  spec.id === 'proportional'
+                    ? showProportional
+                    : spec.id === 'static'
+                      ? showStatic
+                      : true;
                 const hasViolations =
                   spec.id !== 'ours' && summary.minViolations[spec.id] > 0;
+
+                const lineSwatch = (
+                  <svg
+                    width="18"
+                    height="8"
+                    viewBox="0 0 18 8"
+                    aria-hidden="true"
+                  >
+                    <line
+                      x1="0"
+                      y1="4"
+                      x2="18"
+                      y2="4"
+                      stroke={spec.color}
+                      strokeWidth={spec.strokeWidth}
+                      strokeDasharray={spec.dashArray}
+                      opacity={checked ? 1 : 0.4}
+                    />
+                  </svg>
+                );
+
+                if (isOptional) {
+                  return (
+                    <label
+                      key={spec.id}
+                      className="flex items-center gap-1.5 whitespace-nowrap cursor-pointer select-none"
+                    >
+                      <input
+                        type="checkbox"
+                        data-testid={`damage-toggle-${spec.id}`}
+                        checked={checked}
+                        onChange={(e) => {
+                          if (spec.id === 'proportional') {
+                            setShowProportional(e.target.checked);
+                          } else {
+                            setShowStatic(e.target.checked);
+                          }
+                        }}
+                        className="h-3.5 w-3.5 accent-[var(--accent-amber)] cursor-pointer"
+                      />
+                      {lineSwatch}
+                      <span
+                        className={`font-label text-[11px] ${
+                          checked
+                            ? 'text-[var(--text-secondary)]'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        {spec.label}
+                      </span>
+                      {hasViolations && (
+                        <span className="font-data text-[10px] text-[var(--status-critical)]">
+                          (illegal)
+                        </span>
+                      )}
+                    </label>
+                  );
+                }
+
                 return (
                   <div
                     key={spec.id}
                     className="flex items-center gap-2 whitespace-nowrap"
                   >
-                    <svg
-                      width="18"
-                      height="8"
-                      viewBox="0 0 18 8"
-                      aria-hidden="true"
-                    >
-                      <line
-                        x1="0"
-                        y1="4"
-                        x2="18"
-                        y2="4"
-                        stroke={spec.color}
-                        strokeWidth={spec.strokeWidth}
-                        strokeDasharray={spec.dashArray}
-                      />
-                    </svg>
+                    {lineSwatch}
                     <span className="font-label text-[11px] text-[var(--text-secondary)]">
                       {spec.label}
                     </span>
-                    {hasViolations && (
-                      <span className="font-data text-[10px] text-[var(--status-critical)]">
-                        (illegal)
-                      </span>
-                    )}
                   </div>
                 );
               })}

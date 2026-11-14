@@ -47,25 +47,38 @@ export interface DifferenceScale {
 
 const NICE_DIFF_STEPS = [2, 5, 10, 15, 20, 25, 50, 100, 200];
 
-export function computeDifferenceScale(steps: StepRecord[]): DifferenceScale {
+const ALL_SERIES_IDS: Array<'ours' | 'lp_optimum' | 'proportional' | 'static'> = [
+  'ours',
+  'lp_optimum',
+  'proportional',
+  'static',
+];
+
+export function computeDifferenceScale(
+  steps: StepRecord[],
+  visibleIds: ReadonlyArray<'ours' | 'lp_optimum' | 'proportional' | 'static'> = ALL_SERIES_IDS
+): DifferenceScale {
   let rawMin = 0;
   let rawMax = 0;
+  const visibleSet = new Set(visibleIds);
 
   for (const s of steps) {
     const opt = s.baselines.lp_optimum.damage_total;
-    const diffs = [
-      s.damage_total - opt,
-      0,
-      s.baselines.proportional.damage_total - opt,
-      s.baselines.static.damage_total - opt,
-    ];
+    const diffs: number[] = [0];
+    if (visibleSet.has('ours')) diffs.push(s.damage_total - opt);
+    if (visibleSet.has('proportional')) {
+      diffs.push(s.baselines.proportional.damage_total - opt);
+    }
+    if (visibleSet.has('static')) {
+      diffs.push(s.baselines.static.damage_total - opt);
+    }
     for (const d of diffs) {
       if (d < rawMin) rawMin = d;
       if (d > rawMax) rawMax = d;
     }
   }
 
-  const rawSpan = Math.max(10, rawMax - rawMin);
+  const rawSpan = Math.max(4, rawMax - rawMin);
   const targetStep = rawSpan / 4;
   const stepSize =
     NICE_DIFF_STEPS.find((candidate) => candidate >= targetStep) ??
