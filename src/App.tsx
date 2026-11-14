@@ -1,3 +1,5 @@
+import { BaselineComparisonPanel } from './components/BaselineComparisonPanel';
+import { CumulativeDamageChart } from './components/CumulativeDamageChart';
 import { HeaderStrip } from './components/HeaderStrip';
 import { HeroSupplyChart } from './components/HeroSupplyChart';
 import {
@@ -46,7 +48,7 @@ export default function App() {
           onSeek={replay.seek}
         />
 
-        {/* Asymmetric Lower Grid: Left = Agent Panels Zone, Right = Log & Baselines Zone */}
+        {/* Asymmetric Lower Grid: Left = Agent Panels Zone, Right = Log & Baseline Comparison */}
         <div className="mx-auto grid max-w-[1600px] grid-cols-1 lg:grid-cols-[1.1fr_0.9fr]">
           {/* Left Zone: Utility Agents Frame */}
           <section
@@ -106,7 +108,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* Right Zone: Negotiation Log & Baseline Frame */}
+          {/* Right Zone: Negotiation Log + Baseline Comparison Panel */}
           <section
             aria-labelledby="right-zone-heading"
             className="px-6 py-5"
@@ -134,8 +136,22 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            <BaselineComparisonPanel
+              currentRecord={currentRecord}
+              summary={replay.summary}
+            />
           </section>
         </div>
+
+        {/* Bottom Full-Width Row: Cumulative Damage Line Chart */}
+        <CumulativeDamageChart
+          steps={replay.steps}
+          summary={replay.summary}
+          currentStep={replay.currentStep}
+          blackoutInjectedAt={replay.blackoutInjectedAt}
+          onSeek={replay.seek}
+        />
       </main>
     </div>
   );
