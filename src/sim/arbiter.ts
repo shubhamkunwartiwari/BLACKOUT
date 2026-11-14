@@ -111,7 +111,7 @@ export function validateAllocation(
   }
 
   const totalMin = agents.reduce((acc, a) => acc + a.min_mw, 0);
-  if (effectiveSupply >= totalMin - EPS) {
+  if (effectiveSupply >= totalMin - 1e-9) {
     for (const agent of agents) {
       if (normalized[agent.id] < agent.min_mw - EPS) {
         violations.push(

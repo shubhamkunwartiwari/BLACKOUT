@@ -31,6 +31,7 @@ export interface StepRecord {
   damage_step_total: number;
   damage_total: number;
   cascade_active: boolean;
+  shedding: boolean;
   fairness_jain: number;
   baselines: {
     static: BaselineStepResult;
@@ -44,6 +45,12 @@ export interface ScenarioSummary {
   scenarioName: string;
   steps: StepRecord[];
   finalDamage: {
+    ours: number;
+    static: number;
+    proportional: number;
+    lp_optimum: number;
+  };
+  minViolations: {
     ours: number;
     static: number;
     proportional: number;

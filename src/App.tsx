@@ -73,6 +73,7 @@ export default function App() {
               <th className="border border-neutral-400 px-2 py-1 text-right">Static Priority</th>
               <th className="border border-neutral-400 px-2 py-1 text-right">Proportional</th>
               <th className="border border-neutral-400 px-2 py-1 text-right">Myopic Optimum (LP)</th>
+              <th className="border border-neutral-400 px-2 py-1 text-right">Min Violations (Ours / Static / Prop / LP)</th>
               <th className="border border-neutral-400 px-2 py-1 text-right">Avg Jain Fairness (Ours)</th>
             </tr>
           </thead>
@@ -84,6 +85,11 @@ export default function App() {
                 <td className="border border-neutral-400 px-2 py-1 text-right">{summary.finalDamage.static.toFixed(2)}</td>
                 <td className="border border-neutral-400 px-2 py-1 text-right">{summary.finalDamage.proportional.toFixed(2)}</td>
                 <td className="border border-neutral-400 px-2 py-1 text-right">{summary.finalDamage.lp_optimum.toFixed(2)}</td>
+                <td className="border border-neutral-400 px-2 py-1 text-right">
+                  {summary.minViolations.ours} / {summary.minViolations.static} /{' '}
+                  {summary.minViolations.proportional} /{' '}
+                  {summary.minViolations.lp_optimum}
+                </td>
                 <td className="border border-neutral-400 px-2 py-1 text-right">{summary.avgFairness.ours.toFixed(4)}</td>
               </tr>
             ))}

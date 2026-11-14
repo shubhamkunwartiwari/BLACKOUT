@@ -124,7 +124,7 @@ export function negotiateStep(
   }
 
   const totalMin = agents.reduce((acc, a) => acc + a.min_mw, 0);
-  if (effectiveSupply < totalMin - EPS) {
+  if (effectiveSupply < totalMin - 1e-9) {
     const shedAlloc = computeSafeFallback(agents, effectiveSupply);
     log.push(
       `Round 1: Supply (${effectiveSupply.toFixed(2)} MW) < minimum threshold (${totalMin.toFixed(2)} MW); lowest-priority loads shed first.`

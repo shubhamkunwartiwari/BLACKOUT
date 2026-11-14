@@ -61,6 +61,10 @@ export function computeStepDamage(
   const cascadeActive = waterAgent
     ? isCascadePenaltyActive(waterAllocHistory, waterAgent.demand_mw)
     : false;
+  const waterShortfallRatio =
+    waterAgent && waterAgent.demand_mw > 0
+      ? Math.max(0, (waterAgent.demand_mw - allocations.water) / waterAgent.demand_mw)
+      : 0;
 
   const damage_step: AllocationMap = createZeroAllocations();
   let damage_step_total = 0;
@@ -73,7 +77,7 @@ export function computeStepDamage(
     );
     let dmg = shortfallRatio * agent.priority;
     if (agent.id === 'hospital' && cascadeActive) {
-      dmg *= 1.5;
+      dmg = dmg * 1.5 + waterShortfallRatio * 5;
     }
     damage_step[agent.id] = dmg;
     damage_step_total += dmg;
@@ -84,6 +88,23 @@ export function computeStepDamage(
     damage_step_total,
     cascade_active: cascadeActive,
   };
+}
+
+/**
+ * Returns true if supply >= sum(min_mw) and at least one agent receives < min_mw.
+ * When supply < sum(min_mw), load shedding is expected and not counted as a violation.
+ */
+export function hasMinViolation(
+  agents: Agent[],
+  allocations: AllocationMap,
+  supplyMw: number
+): boolean {
+  const effectiveSupply = Number.isFinite(supplyMw) ? Math.max(0, supplyMw) : 0;
+  const totalMin = agents.reduce((acc, a) => acc + a.min_mw, 0);
+  if (effectiveSupply < totalMin - 1e-9) {
+    return false;
+  }
+  return agents.some((agent) => allocations[agent.id] < agent.min_mw - 1e-6);
 }
 
 /**

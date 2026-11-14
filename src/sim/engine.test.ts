@@ -11,10 +11,12 @@ import {
   computeAgentBid,
   computeJainsFairness,
   computeStepDamage,
+  hasMinViolation,
   negotiateStep,
   runScenario,
   runSelfTests,
   sumAllocations,
+  summarizeScenario,
 } from './index';
 
 test('default scenarios have 72 steps and expected supply curves', () => {
@@ -105,7 +107,7 @@ test('arbiter two-phase commit rejects invalid proposals and falls back safely',
   });
 });
 
-test('damage applies 1.5x cascade penalty to hospital only after 3 previous steps of water < 50% demand', () => {
+test('damage applies 1.5x cascade penalty plus water shortfall ratio * 5 to hospital even when hospital is fully served', () => {
   const alloc = { hospital: 15, water: 8, emergency: 15, telecom: 20 };
 
   // Only 2 previous steps -> no cascade
@@ -118,10 +120,19 @@ test('damage applies 1.5x cascade penalty to hospital only after 3 previous step
   assert.equal(brokenStreak.cascade_active, false);
   assert.equal(brokenStreak.damage_step.hospital, 5);
 
-  // 3 previous steps all < 12.5 -> 1.5x penalty on hospital
+  // 3 previous steps all < 12.5 -> 1.5x hospital base damage (5 * 1.5 = 7.5) + water shortfall ratio (17/25=0.68) * 5 (3.4) = 10.9
   const activeCascade = computeStepDamage(DEFAULT_AGENTS, alloc, [8, 8, 8]);
   assert.equal(activeCascade.cascade_active, true);
-  assert.equal(activeCascade.damage_step.hospital, 7.5);
+  assert.ok(Math.abs(activeCascade.damage_step.hospital - 10.9) < 1e-9);
+
+  // Hospital fully served (30 MW), water at 8 MW with active cascade -> 0 * 1.5 + 0.68 * 5 = 3.4
+  const fullHospitalCascade = computeStepDamage(
+    DEFAULT_AGENTS,
+    { hospital: 30, water: 8, emergency: 15, telecom: 20 },
+    [8, 8, 8]
+  );
+  assert.equal(fullHospitalCascade.cascade_active, true);
+  assert.ok(Math.abs(fullHospitalCascade.damage_step.hospital - 3.4) < 1e-9);
 });
 
 test('Jain fairness index equals 1 when ratios are equal and < 1 when unequal', () => {
@@ -191,4 +202,64 @@ test('1000 random supply curves pass all hard constraint assertions', () => {
   assert.equal(result.passed, true, `Self-test failures: ${result.failures.join(' | ')}`);
   assert.equal(result.curvesTested, 1000);
   assert.equal(result.stepsChecked, 72000);
+});
+
+test('shedding flag is true strictly when supply < sum(min_mw)', () => {
+  const blackoutSteps = runScenario(SUDDEN_BLACKOUT_SCENARIO);
+  for (const step of blackoutSteps) {
+    if (step.t >= 20 && step.t < 50) {
+      assert.equal(step.shedding, true, `step ${step.t} (supply=30) should be shedding`);
+    } else {
+      assert.equal(step.shedding, false, `step ${step.t} (supply=${step.supply_mw}) should not be shedding`);
+    }
+  }
+
+  const cascadeSteps = runScenario(CASCADE_SCENARIO);
+  for (const step of cascadeSteps) {
+    assert.equal(step.shedding, false, `cascade step ${step.t} (supply=${step.supply_mw}) should not be shedding`);
+  }
+});
+
+test('minViolations counts steps with min_mw breaches only when supply >= sum(min_mw)', () => {
+  const blackoutSummary = summarizeScenario(SUDDEN_BLACKOUT_SCENARIO);
+  assert.equal(blackoutSummary.minViolations.ours, 0);
+  assert.equal(blackoutSummary.minViolations.lp_optimum, 0);
+  // At supply=60 (steps 50..71, 22 steps), static gives telecom 0 (<5), proportional gives all >= min_mw
+  assert.equal(blackoutSummary.minViolations.static, 22);
+  assert.equal(blackoutSummary.minViolations.proportional, 0);
+
+  const cascadeSummary = summarizeScenario(CASCADE_SCENARIO);
+  assert.equal(cascadeSummary.minViolations.ours, 0);
+  assert.equal(cascadeSummary.minViolations.lp_optimum, 0);
+  assert.ok(cascadeSummary.minViolations.static > 0);
+  assert.ok(cascadeSummary.minViolations.proportional > 0);
+
+  // Direct check: shedding step (< 34 MW) does not count as a violation
+  assert.equal(
+    hasMinViolation(
+      DEFAULT_AGENTS,
+      { hospital: 15, water: 8, emergency: 6, telecom: 1 },
+      30
+    ),
+    false
+  );
+  // Step with supply >= 34 MW and agent below min_mw counts as a violation
+  assert.equal(
+    hasMinViolation(
+      DEFAULT_AGENTS,
+      { hospital: 30, water: 15, emergency: 15, telecom: 0 },
+      60
+    ),
+    true
+  );
+});
+
+test('myopic optimum uses the same cascade damage function as ours', () => {
+  const blackoutSteps = runScenario(SUDDEN_BLACKOUT_SCENARIO);
+  // At step 50 (supply=60), lp_optimum gives hospital=30, water=8 with active 3-step cascade from steps 47-49
+  const step50 = blackoutSteps[50];
+  assert.equal(step50.baselines.lp_optimum.allocations.hospital, 30);
+  assert.equal(step50.baselines.lp_optimum.allocations.water, 8);
+  // Hospital damage = 0 * 1.5 + (17/25)*5 = 3.40
+  assert.ok(Math.abs(step50.baselines.lp_optimum.damage_step.hospital - 3.4) < 1e-9);
 });

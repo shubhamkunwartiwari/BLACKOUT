@@ -8,6 +8,7 @@ import {
   computeJainsFairness,
   computeStepDamage,
   createDemandAllocations,
+  hasMinViolation,
 } from './metrics';
 import { negotiateStep } from './negotiate';
 import { DEFAULT_AGENTS } from './scenarios';
@@ -56,6 +57,7 @@ export function runScenario(
 ): StepRecord[] {
   const initialAlloc = createDemandAllocations(agents);
   const arbiter = new Arbiter(agents, initialAlloc);
+  const totalMin = agents.reduce((acc, a) => acc + a.min_mw, 0);
 
   const records: StepRecord[] = [];
 
@@ -71,6 +73,8 @@ export function runScenario(
 
   for (let t = 0; t < scenario.supply_mw.length; t++) {
     const supplyMw = scenario.supply_mw[t];
+    const effectiveSupply = Number.isFinite(supplyMw) ? Math.max(0, supplyMw) : 0;
+    const shedding = effectiveSupply < totalMin - 1e-9;
     const prevCommitted = arbiter.getCommitted();
 
     // 1. Multi-agent negotiation + Two-phase commit Arbiter
@@ -135,6 +139,7 @@ export function runScenario(
       damage_step_total: oursDamage.damage_step_total,
       damage_total: oursCumulative,
       cascade_active: oursDamage.cascade_active,
+      shedding,
       fairness_jain: oursFairness,
       baselines: {
         static: staticEval.result,
@@ -167,6 +172,24 @@ export function summarizeScenario(
       static: last ? last.baselines.static.damage_total : 0,
       proportional: last ? last.baselines.proportional.damage_total : 0,
       lp_optimum: last ? last.baselines.lp_optimum.damage_total : 0,
+    },
+    minViolations: {
+      ours: steps.filter((s) =>
+        hasMinViolation(agents, s.allocations, s.supply_mw)
+      ).length,
+      static: steps.filter((s) =>
+        hasMinViolation(agents, s.baselines.static.allocations, s.supply_mw)
+      ).length,
+      proportional: steps.filter((s) =>
+        hasMinViolation(
+          agents,
+          s.baselines.proportional.allocations,
+          s.supply_mw
+        )
+      ).length,
+      lp_optimum: steps.filter((s) =>
+        hasMinViolation(agents, s.baselines.lp_optimum.allocations, s.supply_mw)
+      ).length,
     },
     avgFairness: {
       ours: avg((s) => s.fairness_jain),
