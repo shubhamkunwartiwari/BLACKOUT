@@ -1,0 +1,6 @@
+{
+  "name": "Disaster Grid Negotiation Simulator",
+  "description": "Multi-agent power grid negotiation simulation engine comparing priority concession with two-phase commit arbitration against static, proportional, and myopic optimum baselines.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
