@@ -136,6 +136,112 @@ test('damage applies 1.5x cascade penalty plus water shortfall ratio * 5 to hosp
   assert.ok(Math.abs(fullHospitalCascade.damage_step.hospital - 3.4) < 1e-9);
 });
 
+test('telecom->emergency dependency adds shortfall ratio * 3 to emergency damage, instantaneously', () => {
+  // Telecom fully served: no dependency penalty.
+  const full = computeStepDamage(
+    DEFAULT_AGENTS,
+    { hospital: 30, water: 25, emergency: 15, telecom: 20 },
+    []
+  );
+  assert.equal(full.telecom_dependency_active, false);
+  assert.equal(full.damage_step.emergency, 0);
+
+  // Telecom at 10/20 MW (shortfall 0.5), emergency fully served: only the dependency applies (0.5 * 3).
+  const half = computeStepDamage(
+    DEFAULT_AGENTS,
+    { hospital: 30, water: 25, emergency: 15, telecom: 10 },
+    []
+  );
+  assert.equal(half.telecom_dependency_active, true);
+  assert.ok(Math.abs(half.damage_step.emergency - 1.5) < 1e-9);
+  assert.ok(Math.abs(half.damage_step.telecom - 3) < 1e-9); // telecom's own 0.5 * 6
+
+  // Small shortfall (0.05): penalty still applies but the active flag stays off (threshold is > 0.1).
+  const small = computeStepDamage(
+    DEFAULT_AGENTS,
+    { hospital: 30, water: 25, emergency: 15, telecom: 19 },
+    []
+  );
+  assert.equal(small.telecom_dependency_active, false);
+  assert.ok(Math.abs(small.damage_step.emergency - 0.15) < 1e-9);
+
+  // Emergency damage strictly increases as telecom allocation drops, everything else fixed.
+  let prev = -1;
+  for (const telecom of [20, 15, 10, 5, 1]) {
+    const d = computeStepDamage(
+      DEFAULT_AGENTS,
+      { hospital: 30, water: 25, emergency: 12, telecom },
+      []
+    ).damage_step.emergency;
+    assert.ok(d > prev, `emergency damage should rise as telecom drops to ${telecom}`);
+    prev = d;
+  }
+});
+
+test('telecom->emergency dependency is independent of and additive with the water->hospital cascade', () => {
+  const alloc = { hospital: 15, water: 8, emergency: 15, telecom: 10 };
+
+  // Both active: hospital keeps its cascade damage (5*1.5 + 0.68*5 = 10.9), emergency gets only the dependency (1.5).
+  const both = computeStepDamage(DEFAULT_AGENTS, alloc, [8, 8, 8]);
+  assert.equal(both.cascade_active, true);
+  assert.equal(both.telecom_dependency_active, true);
+  assert.ok(Math.abs(both.damage_step.hospital - 10.9) < 1e-9);
+  assert.ok(Math.abs(both.damage_step.emergency - 1.5) < 1e-9);
+
+  // Only the dependency: no cascade history, hospital plain 5, emergency 1.5.
+  const depOnly = computeStepDamage(DEFAULT_AGENTS, alloc, []);
+  assert.equal(depOnly.cascade_active, false);
+  assert.equal(depOnly.telecom_dependency_active, true);
+  assert.equal(depOnly.damage_step.hospital, 5);
+  assert.ok(Math.abs(depOnly.damage_step.emergency - 1.5) < 1e-9);
+
+  // Only the cascade: telecom fully served, hospital 10.9, emergency 0.
+  const cascadeOnly = computeStepDamage(
+    DEFAULT_AGENTS,
+    { ...alloc, telecom: 20 },
+    [8, 8, 8]
+  );
+  assert.equal(cascadeOnly.cascade_active, true);
+  assert.equal(cascadeOnly.telecom_dependency_active, false);
+  assert.ok(Math.abs(cascadeOnly.damage_step.hospital - 10.9) < 1e-9);
+  assert.equal(cascadeOnly.damage_step.emergency, 0);
+
+  // Total is always the sum of the per-agent damages.
+  const sum = Object.values(both.damage_step).reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(both.damage_step_total - sum) < 1e-9);
+});
+
+test('every strategy is charged the telecom dependency, and step records expose the flag', () => {
+  for (const scenario of [SUDDEN_BLACKOUT_SCENARIO, CASCADE_SCENARIO]) {
+    const steps = runScenario(scenario);
+    const telecom = DEFAULT_AGENTS.find((a) => a.id === 'telecom')!;
+    let activeSteps = 0;
+    for (const step of steps) {
+      const shortfall = Math.max(
+        0,
+        (telecom.demand_mw - step.allocations.telecom) / telecom.demand_mw
+      );
+      assert.equal(step.telecom_dependency_active, shortfall > 0.1);
+      if (step.telecom_dependency_active) activeSteps++;
+
+      const strategies = [
+        { alloc: step.allocations, dmg: step.damage_step },
+        { alloc: step.baselines.static.allocations, dmg: step.baselines.static.damage_step },
+        { alloc: step.baselines.proportional.allocations, dmg: step.baselines.proportional.damage_step },
+        { alloc: step.baselines.lp_optimum.allocations, dmg: step.baselines.lp_optimum.damage_step },
+      ];
+      for (const { alloc, dmg } of strategies) {
+        const s = Math.max(0, (telecom.demand_mw - alloc.telecom) / telecom.demand_mw);
+        assert.ok(
+          dmg.emergency >= s * 3 - 1e-9,
+          `step ${step.t}: emergency damage must include telecom dependency`
+        );
+      }
+    }
+    assert.ok(activeSteps > 0, `${scenario.name}: dependency should trigger at least once`);
+  }
+});
+
 test('Jain fairness index equals 1 when ratios are equal and < 1 when unequal', () => {
   const equal = computeJainsFairness(DEFAULT_AGENTS, {
     hospital: 15,

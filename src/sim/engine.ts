@@ -139,6 +139,7 @@ export function runScenario(
       damage_step_total: oursDamage.damage_step_total,
       damage_total: oursCumulative,
       cascade_active: oursDamage.cascade_active,
+      telecom_dependency_active: oursDamage.telecom_dependency_active,
       shedding,
       fairness_jain: oursFairness,
       baselines: {

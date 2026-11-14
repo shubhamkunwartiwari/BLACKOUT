@@ -31,6 +31,7 @@ export interface StepRecord {
   damage_step_total: number;
   damage_total: number;
   cascade_active: boolean;
+  telecom_dependency_active: boolean;
   shedding: boolean;
   fairness_jain: number;
   baselines: {

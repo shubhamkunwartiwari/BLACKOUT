@@ -575,7 +575,7 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
       )}
 
       {/* Step Fairness & Cascade Telemetry Footer */}
-      <div className="mt-4 grid grid-cols-3 divide-x divide-[var(--border-hairline)] border border-[var(--border-hairline)] bg-[var(--bg-surface)]">
+      <div className="mt-4 grid grid-cols-4 divide-x divide-[var(--border-hairline)] border border-[var(--border-hairline)] bg-[var(--bg-surface)]">
         <div className="px-3.5 py-2.5">
           <div className="font-label text-[10px] text-[var(--text-muted)]">
             Jain Fairness
@@ -601,6 +601,24 @@ export function PowerFlowDiagram({ currentRecord }: PowerFlowDiagramProps) {
           >
             {currentRecord.cascade_active
               ? 'ACTIVE (1.5× + PENALTY)'
+              : 'INACTIVE'}
+          </div>
+        </div>
+        <div className="px-3.5 py-2.5">
+          <div className="font-label text-[10px] text-[var(--text-muted)]">
+            Telecom Dependency
+          </div>
+          <div
+            data-testid="telecom-dependency-readout"
+            className="mt-0.5 font-data text-sm font-semibold"
+            style={{
+              color: currentRecord.telecom_dependency_active
+                ? 'var(--accent-amber)'
+                : 'var(--status-safe)',
+            }}
+          >
+            {currentRecord.telecom_dependency_active
+              ? 'ACTIVE · DISPATCH DEGRADED'
               : 'INACTIVE'}
           </div>
         </div>

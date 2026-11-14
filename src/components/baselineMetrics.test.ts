@@ -83,10 +83,11 @@ test('buildScenarioResultsRows returns final damage, avg fairness, and illegal t
   );
   assert.equal(cascadeRows.find((r) => r.id === 'proportional')!.isIllegal, true);
   assert.equal(cascadeRows.find((r) => r.id === 'static')!.isIllegal, true);
-  assert.ok(
-    cascadeRows.find((r) => r.id === 'ours')!.finalDamage <
-      cascadeRows.find((r) => r.id === 'lp_optimum')!.finalDamage
-  );
+  // With the telecom->emergency dependency, our (dependency-blind) agents no
+  // longer beat the myopic optimum in cascade; they must stay within 2% of it.
+  const oursCascade = cascadeRows.find((r) => r.id === 'ours')!.finalDamage;
+  const optCascade = cascadeRows.find((r) => r.id === 'lp_optimum')!.finalDamage;
+  assert.ok(oursCascade <= optCascade * 1.02);
 });
 
 test('buildScenarioDamageBarData computes scale, optimum reference, and signed deltas', () => {
@@ -104,8 +105,8 @@ test('buildScenarioDamageBarData computes scale, optimum reference, and signed d
     },
   ]);
 
-  assert.equal(data.scaleMax, 1200);
-  assert.deepEqual(data.ticks, [0, 600, 1200]);
+  assert.equal(data.scaleMax, 1400);
+  assert.deepEqual(data.ticks, [0, 700, 1400]);
   assert.equal(data.blocks.length, 2);
 
   const boOurs = data.blocks[0].bars.find((b) => b.id === 'ours')!;

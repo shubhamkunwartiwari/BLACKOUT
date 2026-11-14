@@ -44,14 +44,14 @@ test('computeHeadlineStat always returns the optimum-tracking headline with zero
   assert.equal(t71.oursViolationsSoFar, 0);
   assert.equal(
     t71.headline,
-    'Tracking -0.8% from the theoretical optimum, with zero safety violations'
+    'Tracking -0.1% from the theoretical optimum, with zero safety violations'
   );
 
   const cascadeSummary = summarizeScenario(CASCADE_SCENARIO);
   const cascade71 = computeHeadlineStat(cascadeSummary.steps, 71);
   assert.equal(
     cascade71.headline,
-    'Tracking -1.1% from the theoretical optimum, with zero safety violations'
+    'Tracking +0.5% from the theoretical optimum, with zero safety violations'
   );
 });
 

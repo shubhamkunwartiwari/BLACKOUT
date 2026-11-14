@@ -42,11 +42,21 @@ export function isCascadePenaltyActive(
   );
 }
 
+/** Extra emergency damage per unit of telecom shortfall ratio (instantaneous). */
+export const TELECOM_DEPENDENCY_WEIGHT = 3;
+
+/** Telecom shortfall ratio above which the dependency is flagged as active. */
+export const TELECOM_DEPENDENCY_ACTIVE_THRESHOLD = 0.1;
+
 /**
  * Computes per-agent step damage:
  *   damage_step[agent] = ((demand - alloc) / demand) * priority
- *   + cascade penalty: if water alloc < 50% of demand for the previous 3 steps,
- *     hospital damage is multiplied by 1.5.
+ *   + water->hospital cascade: if water alloc < 50% of demand for the previous
+ *     3 steps, hospital damage is multiplied by 1.5 and water shortfall * 5 is added.
+ *   + telecom->emergency dependency: emergency damage always gains
+ *     telecom shortfall ratio * 3 (instantaneous: dispatch/coordination loss
+ *     is immediate, unlike the water cascade which needs a 3-step history).
+ * The two rules are independent and additive.
  */
 export function computeStepDamage(
   agents: Agent[],
@@ -56,6 +66,7 @@ export function computeStepDamage(
   damage_step: AllocationMap;
   damage_step_total: number;
   cascade_active: boolean;
+  telecom_dependency_active: boolean;
 } {
   const waterAgent = agents.find((a) => a.id === 'water');
   const cascadeActive = waterAgent
@@ -65,6 +76,17 @@ export function computeStepDamage(
     waterAgent && waterAgent.demand_mw > 0
       ? Math.max(0, (waterAgent.demand_mw - allocations.water) / waterAgent.demand_mw)
       : 0;
+
+  const telecomAgent = agents.find((a) => a.id === 'telecom');
+  const telecomShortfallRatio =
+    telecomAgent && telecomAgent.demand_mw > 0
+      ? Math.max(
+          0,
+          (telecomAgent.demand_mw - allocations.telecom) / telecomAgent.demand_mw
+        )
+      : 0;
+  const telecomDependencyActive =
+    telecomShortfallRatio > TELECOM_DEPENDENCY_ACTIVE_THRESHOLD;
 
   const damage_step: AllocationMap = createZeroAllocations();
   let damage_step_total = 0;
@@ -79,6 +101,9 @@ export function computeStepDamage(
     if (agent.id === 'hospital' && cascadeActive) {
       dmg = dmg * 1.5 + waterShortfallRatio * 5;
     }
+    if (agent.id === 'emergency') {
+      dmg += telecomShortfallRatio * TELECOM_DEPENDENCY_WEIGHT;
+    }
     damage_step[agent.id] = dmg;
     damage_step_total += dmg;
   }
@@ -87,6 +112,7 @@ export function computeStepDamage(
     damage_step,
     damage_step_total,
     cascade_active: cascadeActive,
+    telecom_dependency_active: telecomDependencyActive,
   };
 }
 
